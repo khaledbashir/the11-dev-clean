@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pdf from 'pdf-parse';
+
+// pdf-parse is a CommonJS module - use require for Next.js API routes
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>;
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +19,7 @@ export async function POST(req: NextRequest) {
     let text = '';
 
     if (file.type === 'application/pdf') {
-      const data = await pdf(buffer);
+      const data = await pdfParse(buffer);
       text = data.text;
     } else {
       // For now only PDF is strictly required by the prompt's example
