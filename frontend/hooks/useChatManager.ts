@@ -465,7 +465,7 @@ export function useChatManager({
         setChatMessages(newMessages);
 
         try {
-            // Simplified flow: call AnythingLLM API for a response
+            // Stream response from AnythingLLM
             const workspace = currentDoc?.workspaceSlug || getWorkspaceForAgent(currentAgentId || "");
             const threadSlug = threadSlugParam || currentDoc?.threadSlug || `temp-${Date.now()}`;
             
@@ -482,76 +482,71 @@ export function useChatManager({
                 log("⚠️ [Chat] Using temporary thread slug - thread may not be persisted");
             }
             
-            log("📤 [Chat] Sending message:", {
+            log("📤 [Chat] Streaming message:", {
                 workspace,
                 threadSlug,
                 messageLength: message.length,
-                hasCurrentDoc: !!currentDoc,
             });
             
-            const response = await anythingLLM.chatWithThread(
-                workspace,
-                threadSlug,
-                message,
-                "chat"
-            );
-
-            if (!response) {
-                log("❌ [Chat] No response from AnythingLLM (null/undefined)");
-                toast.error("Failed to get response from AI. Please check your connection and try again.");
-                setIsChatLoading(false);
-                currentRequestControllerRef.current = null;
-                return;
-            }
-
-            // Extract content from AnythingLLM response (can be textResponse, response, or content)
-            const responseContent = response?.textResponse || response?.response || response?.content || "";
-            
-            log("📥 [Chat] AnythingLLM response received:", {
-                hasResponse: !!response,
-                hasTextResponse: !!response?.textResponse,
-                hasResponseField: !!response?.response,
-                hasContent: !!response?.content,
-                contentLength: responseContent.length,
-                contentPreview: responseContent.substring(0, 100),
-                fullResponseKeys: response ? Object.keys(response) : [],
-            });
-
-            if (!responseContent || !responseContent.trim()) {
-                log("⚠️ [Chat] Empty or whitespace-only response from AnythingLLM");
-                toast.error("Received empty response from AI. The AI may not have generated any content. Please try rephrasing your request.");
-                setIsChatLoading(false);
-                currentRequestControllerRef.current = null;
-                return;
-            }
-
-            // Append assistant response
+            // Create a placeholder assistant message
+            const assistantMsgId = `msg${Date.now()}-assistant`;
             const assistantMessage: ChatMessage = {
-                id: `msg${Date.now()}-assistant`,
+                id: assistantMsgId,
                 role: "assistant",
-                content: responseContent,
+                content: "",
                 timestamp: Date.now(),
             };
             setChatMessages((prev) => [...prev, assistantMessage]);
+            setStreamingMessageId(assistantMsgId);
+
+            // Variable to accumulate full response for final processing
+            let fullResponseContent = "";
+
+            await anythingLLM.streamChatWithThread(
+                workspace,
+                threadSlug,
+                message,
+                (chunk) => {
+                    fullResponseContent += chunk;
+                    setChatMessages((prev) => 
+                        prev.map((msg) => 
+                            msg.id === assistantMsgId 
+                                ? { ...msg, content: fullResponseContent } 
+                                : msg
+                        )
+                    );
+                },
+                "chat"
+            );
+
+            setStreamingMessageId(null);
+            
+            if (!fullResponseContent || !fullResponseContent.trim()) {
+                log("⚠️ [Chat] Empty or whitespace-only response from AnythingLLM");
+                // Don't show toast if it was just empty (maybe still thinking?) - but stream is done.
+            }
 
             // Optionally auto-insert content from assistant message
-            const hasMarker = assistantMessage.content && assistantMessage.content.includes("*** Insert into editor:");
-            const hasJSON = assistantMessage.content && assistantMessage.content.includes("```json");
-            const startsWithBrace = assistantMessage.content && assistantMessage.content.trim().startsWith("{");
+            // We do this AFTER the stream completes to ensure we have the full JSON/content
+            const hasMarker = fullResponseContent.includes("*** Insert into editor:");
+            const hasJSON = fullResponseContent.includes("```json");
+            const startsWithBrace = fullResponseContent.trim().startsWith("{");
             
             const isJsonBlock = hasJSON || startsWithBrace || hasMarker;
             
             if (!isDashboardMode && isJsonBlock) {
-                let contentToInsert = assistantMessage.content;
+                let contentToInsert = fullResponseContent;
                 
                 if (hasMarker) {
-                     contentToInsert = assistantMessage.content.replace(/\*\*\* Insert into editor:\s*/, '');
+                     contentToInsert = fullResponseContent.replace(/\*\*\* Insert into editor:\s*/, '');
                 }
                 
                 // Process content through conversion logic
+                // Strip thinking tags before inserting into Editor
                 let filteredContent = contentToInsert;
                 filteredContent = filteredContent.replace(/<thinking>([\s\S]*?)<\/thinking>/gi, "");
                 filteredContent = filteredContent.replace(/<think>([\s\S]*?)<\/think>/gi, "");
+                filteredContent = filteredContent.replace(/<AI_THINK>([\s\S]*?)<\/AI_THINK>/gi, "");
                 
                 // Convert to TipTap JSON structure
                 let convertedContent: any;
@@ -607,6 +602,7 @@ export function useChatManager({
         } catch (error) {
             log("Error sending message:", error);
             setIsChatLoading(false);
+            setStreamingMessageId(null);
             currentRequestControllerRef.current = null;
         }
     }, [viewMode, currentDoc, currentAgentId, chatMessages, handleInsertContent, log]);

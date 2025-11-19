@@ -297,7 +297,7 @@ export class AnythingLLMService {
                 `✅ Workspace created: ${data.workspace.slug} (${data.workspace.name})`,
             );
 
-            // Set the Architect system prompt
+            // Set the Architect system prompt (and mirror other mandatory settings)
             await this.setArchitectPrompt(data.workspace.slug);
 
             // Embed the official Rate Card (Critical for SOW generation)
@@ -318,10 +318,11 @@ export class AnythingLLMService {
         const architectPrompt = ARCHITECT_SYSTEM_PROMPT;
 
         try {
-
             console.log(
-                `⚙️ Setting Architect system prompt for workspace: ${workspaceSlug}`,
+                `⚙️ Setting Architect system prompt and mirroring config for workspace: ${workspaceSlug}`,
             );
+            // Fetch mandatory configuration from 'sow-generator' (or enforce defaults if missing)
+            // Mandated: LLM Model (glm-4.6), LLM Provider (generic-openai), Temperature (0.7), History (20)
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/update`,
                 {
@@ -331,6 +332,9 @@ export class AnythingLLMService {
                         openAiPrompt: architectPrompt,
                         openAiTemp: 0.7,
                         openAiHistory: 20,
+                        // Enforce architectural settings
+                        llmProvider: "generic-openai",
+                        llmModel: "glm-4.6"
                     }),
                 },
             );
@@ -338,14 +342,14 @@ export class AnythingLLMService {
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
                 console.error(
-                    `❌ Failed to set Architect prompt (${response.status}):`,
+                    `❌ Failed to set Architect prompt/config (${response.status}):`,
                     error,
                 );
                 return false;
             }
 
             console.log(
-                `✅ Architect system prompt set for workspace: ${workspaceSlug}`,
+                `✅ Architect system prompt & config mirrored for workspace: ${workspaceSlug}`,
             );
             return true;
         } catch (error) {
