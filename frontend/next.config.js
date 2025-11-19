@@ -63,6 +63,18 @@ const nextConfig = {
     ];
   },
   productionBrowserSourceMaps: true,
+  
+  // Webpack configuration to externalize pdf-parse (prevents browser API dependencies during build)
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Externalize pdf-parse for server-side to avoid bundling browser dependencies
+      config.externals = config.externals || [];
+      config.externals.push({
+        'pdf-parse': 'commonjs pdf-parse',
+      });
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;
