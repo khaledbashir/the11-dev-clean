@@ -531,11 +531,67 @@ export default function Page() {
             window.history.replaceState({}, "", newUrl);
 
             // Proactively load editor content for the new document
-            const nextDoc = documents.find((d) => d.id === id);
+            let nextDoc = documents.find((d) => d.id === id);
+            
+            // If document not found in local state, try fetching from database
             if (!nextDoc) {
-                console.error("❌ Document not found:", id);
-                toast.error("Document not found. Please refresh the page.");
-                return;
+                console.log("⚠️ Document not found in local state, fetching from database:", id);
+                try {
+                    const response = await fetch(`/api/sow/${id}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        const sow = data.sow;
+                        
+                        // Parse content if it's a string
+                        let parsedContent = defaultEditorContent;
+                        if (sow.content) {
+                            try {
+                                parsedContent = typeof sow.content === "string"
+                                    ? JSON.parse(sow.content)
+                                    : sow.content;
+                            } catch (e) {
+                                console.warn("Failed to parse SOW content:", sow.id);
+                                parsedContent = defaultEditorContent;
+                            }
+                        }
+                        
+                        // Create document object from database data
+                        nextDoc = {
+                            id: sow.id,
+                            title: sow.title || "Untitled SOW",
+                            content: parsedContent,
+                            folderId: sow.folder_id || UNFILED_FOLDER_ID,
+                            workspaceSlug: sow.workspace_slug || undefined,
+                            threadSlug: sow.thread_slug || undefined,
+                            syncedAt: sow.updated_at,
+                            vertical: sow.vertical || null,
+                            service_line: sow.service_line || null,
+                        };
+                        
+                        // Add to documents array to prevent future fetches
+                        setDocuments((prev) => {
+                            // Check if document already exists (avoid duplicates)
+                            const exists = prev.find((d) => d.id === id);
+                            if (exists) {
+                                // Update existing document
+                                return prev.map((d) => (d.id === id ? nextDoc! : d));
+                            } else {
+                                // Add new document
+                                return [...prev, nextDoc!];
+                            }
+                        });
+                        
+                        console.log("✅ Document loaded from database:", id);
+                    } else {
+                        console.error("❌ Document not found in database:", id);
+                        toast.error("Document not found. Please refresh the page.");
+                        return;
+                    }
+                } catch (error) {
+                    console.error("❌ Error fetching document from database:", error);
+                    toast.error("Failed to load document. Please try again.");
+                    return;
+                }
             }
             
             if (editorRef.current) {
