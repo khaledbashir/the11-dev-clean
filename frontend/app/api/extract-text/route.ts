@@ -41,28 +41,20 @@ export async function POST(req: NextRequest) {
       console.log("📑 [API] Processing PDF file...");
       
       try {
-        // Polyfill DOMMatrix for pdfjs-dist (required by newer versions in Node.js)
-        if (typeof global.DOMMatrix === 'undefined') {
-          // @ts-ignore
-          global.DOMMatrix = class DOMMatrix {
-            a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
-            constructor() {}
-            translate() { return this; }
-            scale() { return this; }
-            rotate() { return this; }
-            multiply() { return this; }
-            inverse() { return this; }
-            transformPoint(p: any) { return p; }
-          };
-        }
-
         // Use require inside function to avoid build-time evaluation
         // This prevents browser API dependencies from being loaded during build
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string }>;
+        const pdfParse = require('pdf-parse');
+        
+        // Handle potentially different export formats (CJS vs ESM interop)
+        const parseFunc = typeof pdfParse === 'function' ? pdfParse : pdfParse.default;
+        
+        if (typeof parseFunc !== 'function') {
+           throw new Error(`pdf-parse export is not a function (got ${typeof pdfParse})`);
+        }
         
         console.log("🔧 [API] Calling pdf-parse...");
-        const data = await pdfParse(buffer);
+        const data = await parseFunc(buffer);
         
         if (!data || !data.text) {
           console.error("❌ [API] pdf-parse returned empty or invalid data");

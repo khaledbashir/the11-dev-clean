@@ -74,7 +74,7 @@
     "novel": "^0.4.3",
     "openai": "^4.28.4",
     "papaparse": "^5.5.3",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "^1.1.1",
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.3",
     "prosemirror-state": "^1.4.3",
