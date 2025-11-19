@@ -6,12 +6,35 @@ export default function HomeWelcome({
     onCreateWorkspace,
     onOpenOnboarding,
     workspaceCount = 0,
+    isLoading = false,
 }: {
     onCreateWorkspace?: () => void;
     onOpenOnboarding?: () => void;
     workspaceCount?: number;
+    isLoading?: boolean;
 }) {
     const hasWorkspaces = workspaceCount > 0;
+    
+    // Show loading state to prevent flash
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full w-full">
+                <div className="max-w-xl text-center px-6 py-8">
+                    <div className="flex items-center justify-center">
+                        <div className="rounded-full bg-indigo-50 p-3">
+                            <Sparkles className="h-6 w-6 text-indigo-600" />
+                        </div>
+                    </div>
+                    <h2 className="mt-6 text-2xl font-semibold text-gray-900 dark:text-white">
+                        Loading your workspaces...
+                    </h2>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        Please wait while we fetch your data.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col items-center justify-center h-full w-full">
@@ -43,7 +66,7 @@ export default function HomeWelcome({
                             <Button
                                 variant="ghost"
                                 onClick={onOpenOnboarding}
-                                title="Open the onboarding flow"
+                                title="Open onboarding flow"
                                 className="dark:text-gray-300"
                             >
                                 Guided Tour

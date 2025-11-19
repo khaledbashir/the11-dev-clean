@@ -94,6 +94,7 @@ export default function Page() {
         latestEditorJSON,
         setLatestEditorJSON,
         editorRef,
+        isLoading,
     } = useDocumentState({
         mounted,
         viewMode,
@@ -2306,6 +2307,7 @@ export default function Page() {
                             }}
                             onOpenOnboarding={() => setShowOnboarding(true)}
                             workspaceCount={workspaces.length}
+                            isLoading={isLoading}
                         />
                     ))}
                 </>
