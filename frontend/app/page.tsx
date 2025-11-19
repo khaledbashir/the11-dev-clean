@@ -491,7 +491,7 @@ export default function Page() {
         }
     };
 
-    const handleSelectDoc = (id: string) => {
+    const handleSelectDoc = (id: string, doc?: Document) => {
         if (id === currentDocId) return; // No-op if selecting the same doc
 
         (async () => {
@@ -531,7 +531,8 @@ export default function Page() {
             window.history.replaceState({}, "", newUrl);
 
             // Proactively load editor content for the new document
-            let nextDoc = documents.find((d) => d.id === id);
+            // Use provided document if available, otherwise look it up
+            let nextDoc = doc || documents.find((d) => d.id === id);
             
             // If document not found in local state, try fetching from database
             if (!nextDoc) {
@@ -1221,7 +1222,7 @@ export default function Page() {
                 ...prev,
                 isOpen: false,
             }));
-            handleSelectDoc(sowId);
+            handleSelectDoc(sowId, newDoc);
         } catch (error) {
             console.error("❌ Error creating workspace:", error);
             toast.error("Failed to create workspace. Please try again.");
