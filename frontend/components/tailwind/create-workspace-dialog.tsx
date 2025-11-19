@@ -52,10 +52,10 @@ export default function CreateWorkspaceDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="bg-gray-900 border-gray-700 max-w-md">
+            <DialogContent className="bg-[#1A1A1D] border-[#2A2A2D] max-w-md">
                 <DialogHeader>
                     <DialogTitle className="text-white">Create New Workspace</DialogTitle>
-                    <DialogDescription className="text-gray-400">
+                    <DialogDescription className="text-gray-300">
                         Enter a name for your workspace. This will help you organize your SOWs.
                     </DialogDescription>
                 </DialogHeader>
@@ -71,10 +71,10 @@ export default function CreateWorkspaceDialog({
                             value={workspaceName}
                             onChange={(e) => setWorkspaceName(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                            className="bg-[#0E0F0F] border-[#2A2A2D] text-white placeholder:text-gray-500"
                             autoFocus
                         />
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-400">
                             Use your client's name or a descriptive project name
                         </p>
                     </div>
@@ -87,7 +87,7 @@ export default function CreateWorkspaceDialog({
                             id="workspace-type"
                             value={workspaceType}
                             onChange={(e) => setWorkspaceType(e.target.value as "sow" | "client" | "generic")}
-                            className="w-full bg-gray-800 border border-gray-700 text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full bg-[#0E0F0F] border border-[#2A2A2D] text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1CBF79]"
                         >
                             <option value="sow">SOW Generation</option>
                             <option value="client">Client Folder</option>
@@ -99,7 +99,7 @@ export default function CreateWorkspaceDialog({
                         <Button
                             variant="outline"
                             onClick={onClose}
-                            className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                            className="border-[#2A2A2D] text-gray-300 hover:bg-[#2A2A2D]"
                         >
                             Cancel
                         </Button>
