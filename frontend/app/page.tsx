@@ -120,6 +120,7 @@ export default function Page() {
         handleDeleteAgent,
         handleInsertContent,
         handleSendMessage,
+        handleFileUpload,
     } = useChatManager({
         viewMode,
         currentDoc,
@@ -2321,6 +2322,7 @@ export default function Page() {
                             onClearChat={() => setChatMessages([])}
                             onReplaceChatMessages={setChatMessages}
                             lastUserPrompt={lastUserPrompt}
+                            onFileUpload={handleFileUpload}
                         />
                     ) : null
                 }

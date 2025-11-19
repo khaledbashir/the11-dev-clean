@@ -456,12 +456,18 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
         </View>
 
         {/* Scopes Section */}
-        {scopes.map((scope) => {
+        {(scopes || []).map((scope) => {
           const scopeTitle = sanitizeWeekText(scope.title);
           const scopeDescription = sanitizeWeekText(scope.description);
-          const sanitizedDeliverables = (scope.deliverables || [])
+          let sanitizedDeliverables = (scope.deliverables || [])
             .map(sanitizeWeekText)
             .filter(Boolean);
+          
+          // Defensive: Ensure deliverables has at least a placeholder
+          if (sanitizedDeliverables.length === 0) {
+             sanitizedDeliverables = ["To be defined"];
+          }
+
           const sanitizedAssumptions = (scope.assumptions || [])
             .map(sanitizeWeekText)
             .filter(Boolean);
@@ -502,7 +508,7 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
                   </View>
 
                   {/* Table Rows */}
-                  {scope.items.map((item, itemIndex) => {
+                  {(scope.items || []).map((item, itemIndex) => {
                     const itemDescription = sanitizeWeekText(item.description);
                     const itemRole = sanitizeWeekText(item.role);
                     const rowStyle = itemIndex % 2 === 1 ? styles.tableRowAlt : styles.tableRow;
@@ -608,7 +614,7 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
             </View>
 
             {/* Summary Table Rows */}
-            {scopes.map((scope, index) => {
+            {(scopes || []).map((scope, index) => {
               const summaryRowStyle = index % 2 === 1 ? styles.summaryRowAlt : styles.summaryRow;
               return (
                 <View key={scope.id} style={summaryRowStyle}>

@@ -178,8 +178,15 @@ export function calculateFinancialBreakdown(
     }, 0);
 
     // Step 2: Apply discount
-    const discount = calculateDiscount(subtotal, discountPercent);
-    const subtotalAfterDiscount = subtotal - discount;
+    let discount = calculateDiscount(subtotal, discountPercent);
+
+    // Logic: Discount cannot exceed Subtotal (Sanity Check)
+    if (discount > subtotal) {
+        discount = subtotal;
+    }
+
+    let subtotalAfterDiscount = subtotal - discount;
+    if (subtotalAfterDiscount < 0) subtotalAfterDiscount = 0;
 
     // Step 3: Calculate GST
     const gst = calculateGST(subtotalAfterDiscount);

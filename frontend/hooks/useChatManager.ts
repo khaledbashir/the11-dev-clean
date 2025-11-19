@@ -16,6 +16,7 @@ import { ROLES } from "@/lib/rateCard";
 import { sanitizeEmptyTextNodes } from "@/lib/page-utils";
 import { extractSOWStructuredJson } from "@/lib/export-utils";
 import { convertMarkdownToNovelJSON } from "@/lib/editor-utils";
+import { ARCHITECT_SYSTEM_PROMPT } from "@/lib/system-prompt";
 
 interface UseChatManagerProps {
     viewMode: "editor" | "dashboard";
@@ -43,6 +44,8 @@ export function useChatManager({
     const [lastUserPrompt, setLastUserPrompt] = useState<string>("");
     const [userPromptDiscount, setUserPromptDiscount] = useState<number>(0);
     const [multiScopePricingData, setMultiScopePricingData] = useState<any | null>(null);
+    const [pendingFileText, setPendingFileText] = useState<string | null>(null);
+    const [handshakeState, setHandshakeState] = useState<'idle' | 'analyzing' | 'waiting_confirmation' | 'generating'>('idle');
 
     const currentRequestControllerRef = useRef<AbortController | null>(null);
     const lastMessageSentTimeRef = useRef<number>(0);
@@ -116,6 +119,73 @@ export function useChatManager({
             log("❌ Failed to delete agent:", error);
         }
     }, [currentAgentId, log]);
+
+    const handleFileUpload = useCallback(async (file: File) => {
+        if (!file) return;
+        
+        setIsChatLoading(true);
+        
+        // 1. Extract text (server-side)
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            const res = await fetch('/api/extract-text', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || 'Extraction failed');
+            }
+            
+            const { text } = await res.json();
+            const rawText = text;
+            setPendingFileText(rawText);
+            
+            // 2. Transient Injection (Handshake)
+            // Construct messages for "Summary Plan"
+            const messages = [
+                { role: "system", content: ARCHITECT_SYSTEM_PROMPT },
+                { role: "user", content: `Here is the Raw Client Brief. Read this fully before responding:\n\n${rawText}\n\nProvide a Summary Plan first. Do NOT generate the full SOW JSON yet. Tell me your plan for roles and estimated budget.` }
+            ];
+            
+            // Add user message to UI
+            const userMsg: ChatMessage = {
+                id: `msg${Date.now()}`,
+                role: "user",
+                content: `Uploaded file: ${file.name}. Please analyze this brief.`,
+                timestamp: Date.now()
+            };
+            setChatMessages(prev => [...prev, userMsg]);
+            
+            setHandshakeState('analyzing');
+            
+            const response = await anythingLLM.chatWithOpenAI(messages);
+            
+            if (response) {
+                const aiMsg: ChatMessage = {
+                    id: `msg${Date.now()}-ai`,
+                    role: "assistant",
+                    content: response,
+                    timestamp: Date.now()
+                };
+                setChatMessages(prev => [...prev, aiMsg]);
+                setHandshakeState('waiting_confirmation');
+            } else {
+                toast.error("AI failed to analyze the brief.");
+                setHandshakeState('idle');
+            }
+            
+        } catch (error) {
+            console.error("File upload error:", error);
+            toast.error("Failed to process file.");
+            setHandshakeState('idle');
+        } finally {
+            setIsChatLoading(false);
+        }
+    }, [log]);
 
     const handleInsertContent = useCallback(async (content: string, suggestedRoles: any[] = []) => {
         let localMultiScopeData: any = undefined;
@@ -257,6 +327,71 @@ export function useChatManager({
         const isDashboardMode = viewMode === "dashboard";
 
         if (!message.trim()) return;
+
+        // Handshake Confirmation Logic
+        if (handshakeState === 'waiting_confirmation' && pendingFileText) {
+             // User confirmed (presumably)
+             setHandshakeState('generating');
+             setIsChatLoading(true);
+             
+             // Construct full context chain
+             const lastAiMessage = chatMessages[chatMessages.length - 1];
+             
+             const messages = [
+                { role: "system", content: ARCHITECT_SYSTEM_PROMPT },
+                { role: "user", content: `Here is the Raw Client Brief. Read this fully before responding:\n\n${pendingFileText}` },
+                { role: "assistant", content: lastAiMessage?.content || "Plan acknowledged." },
+                { role: "user", content: message + "\n\nGenerate the full SOW now." }
+             ];
+             
+             // Add user message to UI
+             const userMsg: ChatMessage = {
+                id: `msg${Date.now()}`,
+                role: "user",
+                content: message,
+                timestamp: Date.now()
+             };
+             setChatMessages(prev => [...prev, userMsg]);
+             
+             try {
+                 const response = await anythingLLM.chatWithOpenAI(messages);
+                 
+                 if (response) {
+                     const aiMsg: ChatMessage = {
+                        id: `msg${Date.now()}-ai`,
+                        role: "assistant",
+                        content: response,
+                        timestamp: Date.now()
+                     };
+                     setChatMessages(prev => [...prev, aiMsg]);
+                     
+                     // Trigger auto-insert if markers present
+                     if (response.includes("*** Insert into editor:") || response.includes("```json")) {
+                         // reuse existing logic
+                         let contentToInsert = response;
+                         if (response.includes("*** Insert into editor:")) {
+                             contentToInsert = response.replace(/\*\*\* Insert into editor:\s*/, '');
+                         }
+                         // Process content through conversion logic and insert
+                         extractFinancialReasoning(contentToInsert);
+                         // For brevity, use handleInsertContent to insert content
+                         await handleInsertContent(contentToInsert, []);
+                     }
+                     
+                     setHandshakeState('idle'); // Reset
+                     setPendingFileText(null); // Clear memory
+                 }
+             } catch (e) {
+                 console.error(e);
+                 toast.error("Generation failed.");
+                 setHandshakeState('waiting_confirmation'); // Let them try again
+             } finally {
+                 setIsChatLoading(false);
+                 currentRequestControllerRef.current = null;
+             }
+             
+             return; // Exit function, don't do normal flow
+        }
 
         const now = Date.now();
         if (now - lastMessageSentTimeRef.current < MESSAGE_RATE_LIMIT) {
@@ -556,5 +691,8 @@ export function useChatManager({
         handleDeleteAgent,
         handleInsertContent,
         handleSendMessage,
+        handleFileUpload,
+        pendingFileText,
+        handshakeState,
     };
 }

@@ -74,6 +74,7 @@
     "novel": "^0.4.3",
     "openai": "^4.28.4",
     "papaparse": "^5.5.3",
+    "pdf-parse": "^2.4.5",
     "prosemirror-keymap": "^1.2.3",
     "prosemirror-model": "^1.25.3",
     "prosemirror-state": "^1.4.3",
@@ -103,6 +104,7 @@
   "devDependencies": {
     "@biomejs/biome": "^1.7.2",
     "@types/node": "20.11.24",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.2.61",
     "@types/react-dom": "18.2.19",
     "@types/uuid": "^11.0.0",

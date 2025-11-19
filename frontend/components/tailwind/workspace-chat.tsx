@@ -77,6 +77,7 @@ interface WorkspaceChatProps {
         }>,
     ) => void;
     lastUserPrompt?: string; // Last user message for retry functionality
+    onFileUpload?: (file: File) => Promise<void>;
 }
 
 export default function WorkspaceChat({
@@ -93,6 +94,7 @@ export default function WorkspaceChat({
     onClearChat,
     onReplaceChatMessages,
     lastUserPrompt = "",
+    onFileUpload,
 }: WorkspaceChatProps) {
     const [chatInput, setChatInput] = useState("");
     const [workspacePrompt, setWorkspacePrompt] = useState<string>("");
@@ -744,7 +746,72 @@ export default function WorkspaceChat({
 
     // Process batch upload
     const handleBatchUpload = async () => {
-        if (pendingFiles.length === 0 || !editorWorkspaceSlug) return;
+        if (pendingFiles.length === 0) return;
+
+        // 🚀 NEW ARCHITECTURE: Handle Client Brief Upload (Context Injection)
+        if (onFileUpload) {
+            const filesToUpload = pendingFiles.filter((f) => f.status === "pending");
+            if (filesToUpload.length === 0) return;
+
+            setUploading(true);
+
+            // We process only the FIRST file for the Brief Analysis to avoid context overwrites
+            const fileProgress = filesToUpload[0];
+
+            // Update status to uploading
+            setPendingFiles((prev) =>
+                prev.map((f) =>
+                    f.id === fileProgress.id
+                        ? { ...f, status: "uploading", progress: 0 }
+                        : f,
+                ),
+            );
+
+            try {
+                // Call the parent handler (useChatManager -> handleFileUpload)
+                await onFileUpload(fileProgress.file);
+
+                // Update status to success
+                setPendingFiles((prev) =>
+                    prev.map((f) =>
+                        f.id === fileProgress.id
+                            ? { ...f, status: "success", progress: 100 }
+                            : f,
+                    ),
+                );
+                toast.success("Brief uploaded and analyzed!");
+            } catch (error: any) {
+                console.error("Brief upload failed:", error);
+                setPendingFiles((prev) =>
+                    prev.map((f) =>
+                        f.id === fileProgress.id
+                            ? { ...f, status: "error", error: error.message || "Upload failed" }
+                            : f,
+                    ),
+                );
+                toast.error("Failed to analyze brief.");
+            }
+
+            setUploading(false);
+
+            // Auto-collapse upload area
+            setTimeout(() => {
+                setIsUploadAreaCollapsed(true);
+            }, 2000);
+
+            // Clear completed files
+            setTimeout(() => {
+                setPendingFiles((prev) =>
+                    prev.filter((f) => f.status !== "success" && f.status !== "error"),
+                );
+                setIsUploadAreaCollapsed(false);
+            }, 8000);
+
+            return;
+        }
+
+        // 🏛️ LEGACY ARCHITECTURE: RAG Upload to AnythingLLM
+        if (!editorWorkspaceSlug) return;
 
         const filesToUpload = pendingFiles.filter((f) => f.status === "pending");
         if (filesToUpload.length === 0) return;
@@ -1413,7 +1480,7 @@ export default function WorkspaceChat({
                             {pendingFiles.some((f) => f.status === "pending") && (
                                 <Button
                                     onClick={handleBatchUpload}
-                                    disabled={uploading || !editorWorkspaceSlug}
+                                    disabled={uploading || (!editorWorkspaceSlug && !onFileUpload)}
                                     size="sm"
                                     className="w-full bg-[#15a366] hover:bg-[#10a35a] text-white text-sm font-semibold"
                                 >
@@ -1607,7 +1674,7 @@ export default function WorkspaceChat({
                                 size="sm"
                                 className="h-12 w-12 p-0 border border-[#0E2E33] hover:bg-[#1b1b1e]"
                                 onClick={handleDocumentUploadClick}
-                                disabled={uploading || !editorWorkspaceSlug}
+                                disabled={uploading || (!editorWorkspaceSlug && !onFileUpload)}
                                 title="Upload document to workspace (PDF, Word, Text)"
                             >
                                 {uploading ? (
