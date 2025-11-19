@@ -594,6 +594,20 @@ export class AnythingLLMService {
         metadata: Record<string, any> = {},
     ): Promise<boolean> {
         try {
+            // 🛡️ GUARD CLAUSE: Prevent 400 Error on Empty SOW Embedding
+            // Check content length before attempting upload to prevent AnythingLLM from rejecting empty documents
+            if (!htmlContent || htmlContent.trim().length < 20) {
+                console.log(`⚠️ [GUARD] SOW Content too short to embed (${htmlContent?.length || 0} chars). Skipping RAG embedding. (New SOW - will embed when content is generated)`);
+                return true; // Exit silently, do not crash the app
+            }
+
+            // Additional check: Remove HTML tags and verify actual text content exists
+            const textOnly = htmlContent.replace(/<[^>]*>/g, '').trim();
+            if (textOnly.length < 20) {
+                console.log(`⚠️ [GUARD] SOW Content has insufficient text after HTML tag removal (${textOnly.length} chars). Skipping RAG embedding.`);
+                return true; // Exit silently, do not crash the app
+            }
+
             console.log(
                 `📄 Embedding SOW: ${sowTitle} to workspace: ${workspaceSlug}`,
             );
@@ -616,6 +630,7 @@ Metadata:
       `.trim();
 
             // Step 1: Process raw text as document using AnythingLLM API
+            console.log(`📄 [STEP 7.2.1] Processing raw text document: ${sowTitle}`);
             const rawTextResponse = await fetch(
                 `${this.baseUrl}/api/v1/document/raw-text`,
                 {
@@ -637,6 +652,7 @@ Metadata:
 
             if (!rawTextResponse.ok) {
                 const errorText = await rawTextResponse.text();
+                console.error(`❌ [STEP 7.2.1] FAILED: Document processing returned ${rawTextResponse.status}`);
                 throw new Error(
                     `Failed to process document: ${rawTextResponse.status} ${errorText}`,
                 );
@@ -645,6 +661,7 @@ Metadata:
             const rawTextData = await rawTextResponse.json();
 
             if (!rawTextData.success || !rawTextData.documents?.[0]?.location) {
+                console.error(`❌ [STEP 7.2.1] FAILED: Document processing - no location returned`);
                 throw new Error(
                     rawTextData.error ||
                         "Document processing failed - no location returned",
@@ -655,24 +672,28 @@ Metadata:
             
             // Validate document location format
             if (!documentLocation || typeof documentLocation !== 'string') {
+                console.error(`❌ [STEP 7.2.1] FAILED: Invalid document location format`);
                 throw new Error(
                     `Invalid document location format: ${JSON.stringify(documentLocation)}`,
                 );
             }
 
-            console.log(`✅ Document processed: ${documentLocation}`);
+            console.log(`✅ [STEP 7.2.1] SUCCESS: Document processed: ${documentLocation}`);
 
             // Verify workspace exists before attempting to embed
+            console.log(`🔍 [STEP 7.2.2] Verifying workspace exists: ${workspaceSlug}`);
             const workspaceDetails = await this.getWorkspaceDetails(workspaceSlug);
             if (!workspaceDetails) {
+                console.error(`❌ [STEP 7.2.2] FAILED: Workspace not found: ${workspaceSlug}`);
                 throw new Error(
                     `Workspace not found: ${workspaceSlug}. Cannot embed document.`,
                 );
             }
+            console.log(`✅ [STEP 7.2.2] SUCCESS: Workspace verified: ${workspaceSlug}`);
 
             // Step 2: EMBED document in workspace (not just update)
             // Using /update-embeddings endpoint (NOT /update)
-            console.log(`🔄 Embedding document ${documentLocation} into workspace ${workspaceSlug}...`);
+            console.log(`🔄 [STEP 7.2.3] Embedding document ${documentLocation} into workspace ${workspaceSlug}...`);
             const workspaceEmbedResponse = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/update-embeddings`,
                 {
@@ -692,8 +713,8 @@ Metadata:
                     errorText = `Unable to read error response: ${e}`;
                 }
                 
-                // Log detailed error information for debugging
-                console.error(`❌ Embedding failed:`, {
+                // Log detailed error information for debugging (Sequential Workflow Protocol)
+                console.error(`❌ [STEP 7.2.3] FAILED: Embedding document in workspace`, {
                     status: workspaceEmbedResponse.status,
                     statusText: workspaceEmbedResponse.statusText,
                     workspaceSlug,
@@ -707,7 +728,7 @@ Metadata:
             }
 
             const embedResult = await workspaceEmbedResponse.json();
-            console.log(`✅ Document EMBEDDED in workspace: ${workspaceSlug}`);
+            console.log(`✅ [STEP 7.2.3] SUCCESS: Document EMBEDDED in workspace: ${workspaceSlug}`);
 
             return true;
         } catch (error) {
@@ -1707,7 +1728,7 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             const masterWorkspaceSlug = "sow-generator";
             const masterDashboardSlug = await this.getOrCreateMasterDashboard();
 
-            console.log(`📊 Embedding SOW in workspaces...`);
+            console.log(`📊 [STEP 7] Embedding SOW in workspaces (Sequential Workflow Protocol)`);
             console.log(
                 `   📁 Master generation workspace: ${masterWorkspaceSlug}`,
             );
@@ -1748,7 +1769,18 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                 throw new Error('Content is empty after conversion to HTML');
             }
 
+            // Check if content is meaningful (not just empty HTML tags)
+            // Remove HTML tags and check if there's actual text content
+            const textOnly = htmlContent.replace(/<[^>]*>/g, '').trim();
+            if (textOnly.length < 20) {
+                console.log(`⏭️ [STEP 7.1] Content validation: Content too small (${textOnly.length} chars). Skipping embedding - will embed when content is generated.`);
+                return true; // Return true to not block the flow, but skip actual embedding
+            }
+
+            console.log(`📊 [STEP 7.1] Content validation: Content size acceptable (${textOnly.length} chars). Proceeding with embedding.`);
+
             // Step 1: Embed in master GENERATION workspace (RAG context)
+            console.log(`📊 [STEP 7.2] Embedding SOW in master generation workspace: ${masterWorkspaceSlug}`);
             const masterEmbed = await this.embedSOWDocument(
                 masterWorkspaceSlug,
                 sowTitle,
@@ -1756,14 +1788,14 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             );
 
             if (!masterEmbed) {
-                console.warn(
-                    `⚠️ Failed to embed SOW in master generation workspace: ${masterWorkspaceSlug}`,
+                console.error(
+                    `❌ [STEP 7.2] FAILED: Embedding in master generation workspace: ${masterWorkspaceSlug}`,
                 );
                 return false;
             }
 
             console.log(
-                `✅ SOW embedded in master generation workspace: ${masterWorkspaceSlug}`,
+                `✅ [STEP 7.2] SUCCESS: SOW embedded in master generation workspace: ${masterWorkspaceSlug}`,
             );
 
             // Step 2: Embed in master dashboard for analytics (use client context if provided)
@@ -1771,6 +1803,7 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                 ? `[${clientContext.toUpperCase()}] ${sowTitle}`
                 : sowTitle;
 
+            console.log(`📊 [STEP 7.3] Embedding SOW in master dashboard: ${masterDashboardSlug}`);
             const dashboardEmbed = await this.embedSOWDocument(
                 masterDashboardSlug,
                 dashboardTitle,
@@ -1778,13 +1811,13 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             );
 
             if (!dashboardEmbed) {
-                console.warn(`⚠️ Failed to embed SOW in master dashboard`);
+                console.error(`❌ [STEP 7.3] FAILED: Embedding in master dashboard: ${masterDashboardSlug}`);
                 return false;
             }
 
-            console.log(`✅ SOW embedded in master dashboard for analytics`);
+            console.log(`✅ [STEP 7.3] SUCCESS: SOW embedded in master dashboard for analytics`);
             console.log(
-                `✅✅✅ SOW successfully embedded in all required workspaces!`,
+                `✅✅✅ [STEP 7] COMPLETE: SOW successfully embedded in all required workspaces!`,
             );
 
             return true;

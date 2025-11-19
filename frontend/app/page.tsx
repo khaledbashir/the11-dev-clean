@@ -1070,8 +1070,9 @@ export default function Page() {
                 currentStep: 3,
             }));
 
-            // 📊 STEP 4: Embed SOW in workspace and master dashboard
-            console.log("📊 Embedding SOW in workspaces...");
+            // 📊 STEP 4: Embed SOW in workspace and master dashboard (optional - skip if empty)
+            // Sequential Workflow Protocol: This step is non-blocking to maintain Guaranteed System Reliability
+            console.log("📊 [STEP 4] Embedding SOW in workspaces (Sequential Workflow Protocol)...");
             const sowContent = JSON.stringify(defaultEditorContent);
             const embedSuccess = await anythingLLM.embedSOWInBothWorkspaces(
                 sowTitle,
@@ -1080,33 +1081,37 @@ export default function Page() {
             );
             
             if (!embedSuccess) {
-                throw new Error("Failed to embed SOW in workspaces");
-            }
-            
-            console.log("✅ SOW embedded in workspaces - awaiting confirmation...");
-            
-            // 🔍 VERIFICATION: Wait for embedding to be confirmed (retry logic)
-            // This ensures the backend has fully processed the link before we proceed
-            let embeddingConfirmed = false;
-            for (let attempt = 0; attempt < 3; attempt++) {
-                try {
-                    // Small delay to allow backend processing
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    // Verify workspace has the document (optional check - can be removed if too slow)
-                    const workspaceDetails = await anythingLLM.getWorkspaceDetails(workspace.slug);
-                    if (workspaceDetails?.documents && workspaceDetails.documents.length > 0) {
-                        embeddingConfirmed = true;
-                        console.log(`✅ Embedding confirmed on attempt ${attempt + 1}`);
-                        break;
+                // Non-fatal: Log warning but don't block SOW creation
+                // Embedding will happen automatically when content is generated
+                // This maintains Guaranteed System Reliability by not cascading failures
+                console.warn("⚠️ [STEP 4] SOW embedding skipped or failed (content may be empty). Will embed when content is generated. (Non-blocking - workflow continues)");
+            } else {
+                console.log("✅ [STEP 4] SOW embedded in workspaces - awaiting confirmation...");
+                
+                // 🔍 VERIFICATION: Wait for embedding to be confirmed (retry logic)
+                // This ensures the backend has fully processed the link before we proceed
+                // Only verify if embedding was actually attempted
+                let embeddingConfirmed = false;
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        // Small delay to allow backend processing
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                        // Verify workspace has the document (optional check - can be removed if too slow)
+                        const workspaceDetails = await anythingLLM.getWorkspaceDetails(workspace.slug);
+                        if (workspaceDetails?.documents && workspaceDetails.documents.length > 0) {
+                            embeddingConfirmed = true;
+                            console.log(`✅ Embedding confirmed on attempt ${attempt + 1}`);
+                            break;
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Embedding verification attempt ${attempt + 1} failed:`, error);
                     }
-                } catch (error) {
-                    console.warn(`⚠️ Embedding verification attempt ${attempt + 1} failed:`, error);
                 }
-            }
-            
-            if (!embeddingConfirmed) {
-                console.warn("⚠️ Could not verify embedding, but proceeding anyway (may be a timing issue)");
+                
+                if (!embeddingConfirmed) {
+                    console.warn("⚠️ Could not verify embedding, but proceeding anyway (may be a timing issue)");
+                }
             }
 
             // Mark all steps complete
