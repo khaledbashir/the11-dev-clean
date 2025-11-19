@@ -537,8 +537,11 @@ export function useChatManager({
             // Optionally auto-insert content from assistant message
             const hasMarker = assistantMessage.content && assistantMessage.content.includes("*** Insert into editor:");
             const hasJSON = assistantMessage.content && assistantMessage.content.includes("```json");
+            const startsWithBrace = assistantMessage.content && assistantMessage.content.trim().startsWith("{");
             
-            if (!isDashboardMode && (hasMarker || hasJSON)) {
+            const isJsonBlock = hasJSON || startsWithBrace || hasMarker;
+            
+            if (!isDashboardMode && isJsonBlock) {
                 let contentToInsert = assistantMessage.content;
                 
                 if (hasMarker) {

@@ -1157,8 +1157,8 @@ export default function Page() {
                 `✅ Created workspace "${workspaceName}" with blank SOW ready to edit!`,
             );
 
-            // Show success state for 1.0s before closing modal and redirecting
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Show success state for 1.5s before closing modal and redirecting
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
             // Close progress modal and auto-select the new SOW
             setWorkspaceCreationProgress((prev) => ({
