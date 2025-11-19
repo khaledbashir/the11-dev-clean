@@ -139,6 +139,16 @@ export default function SidebarNav({
   const actualOnSelectDocument = onSelectDocument || onSelectSOW;
   const actualOnRenameDocument = onRenameDocument || onRenameSOW;
   const actualOnDeleteDocument = onDeleteDocument || onDeleteSOW;
+  const actualOnCreateFolder = onCreateFolder || ((name: string) => {
+    if (onCreateWorkspace) {
+      onCreateWorkspace(name, "sow");
+    }
+  });
+  const actualOnCreateDocument = onCreateDocument || ((folderId: string | null, name: string) => {
+    if (onCreateSOW && folderId) {
+      onCreateSOW(folderId, name);
+    }
+  });
   // Helper functions to categorize folders (must be before usage)
   const isAgentFolder = (folder: any) => {
     const agentSlugs = [
@@ -420,7 +430,9 @@ export default function SidebarNav({
             ) : (
               <button
                 onClick={() => {
-                  onSelectFolder(folder.id);
+                  if (actualOnSelectFolder) {
+                    actualOnSelectFolder(folder.id);
+                  }
                 }}
                 className={`w-full text-left px-2 py-1 text-sm transition-colors flex items-center gap-1 ${
                   currentFolderId === folder.id
@@ -442,7 +454,9 @@ export default function SidebarNav({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onCreateDocument(folder.id, 'Untitled Document');
+                  if (actualOnCreateDocument) {
+                    actualOnCreateDocument(folder.id, 'Untitled Document');
+                  }
                 }}
                 className="p-1.5 bg-gray-700/50 hover:bg-green-500/30 rounded text-green-400 hover:text-white transition-all"
                 title="New document in this folder"
@@ -577,7 +591,9 @@ export default function SidebarNav({
               <button
                 onClick={() => {
                   console.log('🔍 Document clicked:', document.id, document.title);
-                  onSelectDocument(document.id);
+                  if (actualOnSelectDocument) {
+                    actualOnSelectDocument(document.id);
+                  }
                 }}
                 className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors"
                 title={document.title}
@@ -821,7 +837,12 @@ export default function SidebarNav({
                       <span>Folders</span>
                       <span className="ml-auto text-xs text-gray-500">({clientFolders.length})</span>
                       <button
-                        onClick={(e) => { e.stopPropagation(); onCreateFolder("New Folder"); }}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          if (actualOnCreateFolder) {
+                            actualOnCreateFolder("New Folder");
+                          }
+                        }}
                         className="p-1.5 hover:bg-gray-800/60 rounded-md text-gray-300 hover:text-white ml-2"
                         title="New folder"
                       >
