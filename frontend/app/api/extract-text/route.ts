@@ -41,6 +41,21 @@ export async function POST(req: NextRequest) {
       console.log("📑 [API] Processing PDF file...");
       
       try {
+        // Polyfill DOMMatrix for pdfjs-dist (required by newer versions in Node.js)
+        if (typeof global.DOMMatrix === 'undefined') {
+          // @ts-ignore
+          global.DOMMatrix = class DOMMatrix {
+            a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+            constructor() {}
+            translate() { return this; }
+            scale() { return this; }
+            rotate() { return this; }
+            multiply() { return this; }
+            inverse() { return this; }
+            transformPoint(p: any) { return p; }
+          };
+        }
+
         // Use require inside function to avoid build-time evaluation
         // This prevents browser API dependencies from being loaded during build
         // eslint-disable-next-line @typescript-eslint/no-var-requires
