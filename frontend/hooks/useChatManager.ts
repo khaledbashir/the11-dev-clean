@@ -130,18 +130,38 @@ export function useChatManager({
         formData.append('file', file);
         
         try {
+            console.log(`📤 [Frontend] Uploading file: ${file.name} (${file.size} bytes)`);
             const res = await fetch('/api/extract-text', {
                 method: 'POST',
                 body: formData
             });
             
             if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.error || 'Extraction failed');
+                let errorMessage = 'Extraction failed';
+                try {
+                    const err = await res.json();
+                    errorMessage = err.error || errorMessage;
+                } catch (parseError) {
+                    // If JSON parsing fails, use status text
+                    errorMessage = `Server error: ${res.status} ${res.statusText}`;
+                }
+                
+                console.error(`❌ [Frontend] Extraction failed: ${errorMessage}`);
+                toast.error(`❌ PDF Extraction Failed: ${errorMessage}`);
+                throw new Error(errorMessage);
             }
             
             const { text } = await res.json();
+            
+            if (!text || text.trim().length === 0) {
+                const errorMsg = 'No text could be extracted from the PDF. The file may be image-only or corrupted.';
+                console.error(`❌ [Frontend] ${errorMsg}`);
+                toast.error(`❌ ${errorMsg}`);
+                throw new Error(errorMsg);
+            }
+            
             const rawText = text;
+            console.log(`✅ [Frontend] Text extracted successfully: ${rawText.length} characters`);
             setPendingFileText(rawText);
             
             // 2. Transient Injection (Handshake)
@@ -178,9 +198,13 @@ export function useChatManager({
                 setHandshakeState('idle');
             }
             
-        } catch (error) {
-            console.error("File upload error:", error);
-            toast.error("Failed to process file.");
+        } catch (error: any) {
+            console.error("❌ [Frontend] File upload error:", error);
+            
+            // Show specific error message if available
+            const errorMessage = error.message || 'Failed to process file. Please check the file format and try again.';
+            toast.error(`❌ ${errorMessage}`);
+            
             setHandshakeState('idle');
         } finally {
             setIsChatLoading(false);
