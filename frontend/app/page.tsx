@@ -1883,11 +1883,33 @@ export default function Page() {
                 console.log("📝 [PDF Export] Using tiptapToHTML() fallback");
             }
 
-            if (
-                !editorHTML ||
-                editorHTML.trim() === "" ||
-                editorHTML === "<p></p>"
-            ) {
+            // Check if document has actual content - validate both HTML and JSON structure
+            const hasContent = 
+                (editorHTML && 
+                 editorHTML.trim() !== "" && 
+                 editorHTML !== "<p></p>") ||
+                (contentForExport?.content && 
+                 Array.isArray(contentForExport.content) && 
+                 contentForExport.content.length > 0 &&
+                 contentForExport.content.some((node: any) => {
+                     // Check if node has actual content (not just empty paragraphs)
+                     if (node.type === "paragraph" && node.content) {
+                         return node.content.some((c: any) => 
+                             c.type === "text" && c.text && c.text.trim() !== ""
+                         );
+                     }
+                     if (node.type === "editablePricingTable" && node.attrs?.rows) {
+                         return node.attrs.rows.length > 0;
+                     }
+                     if (node.type === "heading" && node.content) {
+                         return node.content.some((c: any) => 
+                             c.type === "text" && c.text && c.text.trim() !== ""
+                         );
+                     }
+                     return node.type && node.type !== "paragraph";
+                 }));
+
+            if (!hasContent) {
                 toast.error(
                     "❌ Document is empty. Please add content before exporting.",
                 );

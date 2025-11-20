@@ -12,6 +12,8 @@ const SOWPdfExportWrapper: React.FC<SOWPdfExportWrapperProps> = ({
   sowData,
   fileName = 'Statement-of-Work.pdf',
   variant = 'default',
+  isOpen,
+  onClose,
 }) => {
   const [showPreview, setShowPreview] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -20,6 +22,11 @@ const SOWPdfExportWrapper: React.FC<SOWPdfExportWrapperProps> = ({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // If modal is closed, don't render
+  if (isOpen !== undefined && !isOpen) {
+    return null;
+  }
 
   // Don't render PDF components until client-side
   if (!mounted) {
@@ -150,7 +157,8 @@ const SOWPdfExportWrapper: React.FC<SOWPdfExportWrapperProps> = ({
     );
   }
 
-  return (
+  // Modal wrapper content
+  const modalContent = (
     <div className="sow-pdf-export-wrapper">
       <div className="flex gap-4 mb-4">
         {/* Download Button */}
@@ -239,6 +247,71 @@ const SOWPdfExportWrapper: React.FC<SOWPdfExportWrapperProps> = ({
       )}
     </div>
   );
+
+  // If isOpen is provided, render as modal
+  if (isOpen !== undefined) {
+    return (
+      <div
+        className={`fixed inset-0 z-50 flex items-center justify-center ${
+          isOpen ? 'visible' : 'invisible'
+        }`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget && onClose) {
+            onClose();
+          }
+        }}
+      >
+        {/* Backdrop */}
+        <div
+          className={`absolute inset-0 bg-black transition-opacity ${
+            isOpen ? 'opacity-50' : 'opacity-0'
+          }`}
+        />
+        
+        {/* Modal */}
+        <div
+          className={`relative bg-white rounded-lg shadow-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto transition-transform ${
+            isOpen ? 'scale-100' : 'scale-95'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Close"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          )}
+          
+          {/* Title */}
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">
+            Download Professional PDF
+          </h2>
+          
+          {/* Content */}
+          {modalContent}
+        </div>
+      </div>
+    );
+  }
+
+  // Default: render without modal wrapper
+  return modalContent;
 };
 
 export default SOWPdfExportWrapper;
