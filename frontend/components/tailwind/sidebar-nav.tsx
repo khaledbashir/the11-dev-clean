@@ -220,9 +220,8 @@ export default function SidebarNav({
   // 🆕 Loading state for New Document button
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
 
-  // Helper function to truncate names only if extremely long (for very edge cases)
-  // Default: Show full name, only truncate if over 50 characters
-  const truncateName = (name: string, maxLength: number = 50): string => {
+  // Helper function to truncate names to first 4-5 characters
+  const truncateName = (name: string, maxLength: number = 5): string => {
     if (name.length <= maxLength) return name;
     return name.substring(0, maxLength) + "...";
   };
@@ -453,7 +452,7 @@ export default function SidebarNav({
                 }`}
                 title={folder.name}
               >
-                <span className="block truncate" title={folder.name}>{folder.name}</span>
+                <span className="block truncate" title={folder.name}>{truncateName(folder.name)}</span>
                 <span className="ml-1 text-xs text-gray-500 flex-shrink-0">({folderDocuments.length})</span>
               </button>
             )}
@@ -461,22 +460,6 @@ export default function SidebarNav({
 
           {/* Action Buttons - ALWAYS VISIBLE */}
           <div className="flex gap-1 flex-shrink-0 items-center overflow-visible ml-1">
-            {/* Add New Doc in Folder */}
-            {!isDeleteMode && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (actualOnCreateDocument) {
-                    actualOnCreateDocument(folder.id, 'Untitled Document');
-                  }
-                }}
-                className="p-1.5 bg-gray-700/50 hover:bg-green-500/30 rounded text-green-400 hover:text-white transition-all flex-shrink-0"
-                title="New document in this folder"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-            )}
-
             {/* Rename */}
             {!isDeleteMode && (
               <button
@@ -607,8 +590,8 @@ export default function SidebarNav({
           {/* Doc Icon */}
           <FileText className="w-4 h-4 flex-shrink-0" />
 
-          {/* Document Name - Full name with tooltip */}
-          <div className="flex-1 min-w-0 mr-2 overflow-hidden">
+          {/* Document Name - Truncated with tooltip */}
+          <div className="flex-1 min-w-0 mr-0.5 overflow-hidden">
             {renamingId === document.id ? (
               <Input
                 value={renameValue}
@@ -632,13 +615,13 @@ export default function SidebarNav({
                 className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors block truncate"
                 title={document.title}
               >
-                {document.title}
+                {truncateName(document.title)}
               </button>
             )}
           </div>
 
-          {/* Action Buttons - ALWAYS VISIBLE */}
-          <div className="flex items-center gap-1.5 flex-shrink-0 overflow-visible ml-1">
+          {/* Action Buttons - ALWAYS VISIBLE - Reduced spacing */}
+          <div className="flex items-center gap-0.5 flex-shrink-0 overflow-visible">
             {/* Rename */}
             <button
               onClick={(e) => {
@@ -679,11 +662,11 @@ export default function SidebarNav({
 
   return (
     <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible resize-x">
-      {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner - ALWAYS VISIBLE */}
+      {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Left Corner - ALWAYS VISIBLE */}
       {onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
-          className="absolute top-4 right-4 p-2.5 hover:bg-gray-800 rounded-lg transition-all duration-200 text-white bg-gray-900/95 backdrop-blur-sm border border-gray-700 z-50 shadow-lg hover:shadow-xl active:scale-95"
+          className="absolute top-4 left-4 p-2.5 hover:bg-gray-800 rounded-lg transition-all duration-200 text-white bg-gray-900/95 backdrop-blur-sm border border-gray-700 z-50 shadow-lg hover:shadow-xl active:scale-95"
           title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
@@ -695,36 +678,16 @@ export default function SidebarNav({
         </button>
       )}
 
-      {/* LOGO HEADER - Padding right accounts for toggle button */}
-      <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-gray-800 pr-20">
+      {/* LOGO HEADER - Padding left accounts for toggle button */}
+      <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-gray-800 pl-20">
         <h2 className="text-xl font-bold text-white">Social Garden</h2>
       </div>
 
       {/* WORKSPACES SECTION */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Search Bar with Create Button */}
-        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-          <Input
-            placeholder="Search workspaces..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 text-xs bg-gray-900/50 border-gray-700 text-gray-300 placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-[#1CBF79]/50 focus-visible:border-[#1CBF79] max-w-xs flex-shrink-0"
-          />
-          <button
-            onClick={() => {
-              console.log('🆕 Create Workspace button clicked');
-              onCreateWorkspace?.();
-            }}
-            className="p-1.5 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors flex-shrink-0"
-            title="Create new workspace"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-
         {/* Documents List */}
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-2">
+          <div className="p-2 space-y-2 w-full min-w-0">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -736,13 +699,11 @@ export default function SidebarNav({
                 // Use workspaces prop if available, otherwise fall back to localFolders
                 const sourceFolders = Array.isArray(workspaces) && workspaces.length > 0 ? workspaces : localFolders;
                 const clientFolders = sourceFolders.filter(f =>
-                  !isAgentFolder(f) && !isSystemFolder(f) &&
-                  (f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                   localDocuments.filter(d => d.folderId === f.id).some(d => d.title.toLowerCase().includes(searchQuery.toLowerCase())))
+                  !isAgentFolder(f) && !isSystemFolder(f)
                 );
 
                 return (
-                  <div className="space-y-1">
+                  <div className="space-y-1 workspaces-section">
                     <div
                       className="w-full flex items-center gap-2 px-2 py-1.5 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors cursor-pointer"
                       onClick={() => setFoldersExpanded(!foldersExpanded)}
@@ -755,6 +716,19 @@ export default function SidebarNav({
                       <LayoutDashboard className="w-4 h-4 text-[#1CBF79]" />
                       <span>Workspaces</span>
                       <span className="ml-auto text-xs text-gray-500">({clientFolders.length})</span>
+                      {foldersExpanded && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            debug('🆕 Create Workspace button clicked');
+                            onCreateWorkspace?.();
+                          }}
+                          className="p-1.5 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                          title="Create new workspace"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
 
                     {foldersExpanded && clientFolders.length > 0 && (

@@ -201,4 +201,9 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;  /* Safari and Chrome */
   }
+  
+  /* Fix truncation in sidebar workspaces section */
+  .workspaces-section {
+    width: fit-content;
+  }
 }
