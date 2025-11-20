@@ -299,12 +299,19 @@ const EditablePricingTableComponent = ({ node, updateAttributes }: any) => {
         console.log("➕ [Pricing Table] Current rows count:", rows.length);
         
         setIsUserModified(true); // Mark as user-modified to prevent enforcedRows from overwriting
+        setMode('edit'); // Switch to edit mode when user adds a row
         
+        // Use functional update to ensure state is properly updated
         setRows((prevRows) => {
             const updatedRows = [...prevRows, newRow];
             console.log("➕ [Pricing Table] Updated rows count:", updatedRows.length);
             return updatedRows;
         });
+        
+        // Force a small delay to ensure state update completes
+        setTimeout(() => {
+            console.log("✅ [Pricing Table] Row addition completed");
+        }, 0);
     };
 
     const removeRow = (id: string) => {
@@ -332,6 +339,9 @@ const EditablePricingTableComponent = ({ node, updateAttributes }: any) => {
     };
 
     const handleDragOver = (e: React.DragEvent<HTMLTableRowElement>) => {
+        // Only handle drag over when actually dragging (not just hovering)
+        if (!draggedRowId) return;
+        
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         const targetRow = e.currentTarget;
@@ -342,6 +352,8 @@ const EditablePricingTableComponent = ({ node, updateAttributes }: any) => {
     };
 
     const handleDragLeave = (e: React.DragEvent<HTMLTableRowElement>) => {
+        // Only clear drop target when actually dragging
+        if (!draggedRowId) return;
         setDropTargetId(null);
     };
 
@@ -578,10 +590,10 @@ const EditablePricingTableComponent = ({ node, updateAttributes }: any) => {
                                         handleDragStart(e, row.id)
                                     }
                                     onDragEnd={handleDragEnd}
-                                    onDragOver={handleDragOver}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={handleDrop}
-                                    className={`pricing-row hover:bg-muted dark:bg-gray-800 ${dropTargetId === row.id ? "drag-over" : ""} ${draggedRowId === row.id ? "dragging" : ""}`}
+                                    onDragOver={draggedRowId ? handleDragOver : undefined}
+                                    onDragLeave={draggedRowId ? handleDragLeave : undefined}
+                                    onDrop={draggedRowId ? handleDrop : undefined}
+                                    className={`pricing-row transition-colors ${draggedRowId ? "" : "hover:bg-gray-100 dark:hover:bg-gray-700"} dark:bg-gray-800 ${dropTargetId === row.id ? "drag-over bg-blue-50 dark:bg-blue-900/20" : ""} ${draggedRowId === row.id ? "dragging opacity-40" : ""}`}
                                 >
                                     <td
                                         className="border border-border p-2"

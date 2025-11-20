@@ -220,6 +220,12 @@ export default function SidebarNav({
   // 🆕 Loading state for New Document button
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
 
+  // Helper function to truncate names to 5 characters + "..."
+  const truncateName = (name: string, maxLength: number = 5): string => {
+    if (name.length <= maxLength) return name;
+    return name.substring(0, maxLength) + "...";
+  };
+
   // Get deletable folders (not protected) - calculate inside useMemo to avoid initialization issues
   const { deletableFolders, areAllSelected } = (() => {
     const deletable = actualFolders.filter(f => !isProtectedFolder(f));
@@ -418,7 +424,7 @@ export default function SidebarNav({
             )}
           </button>
 
-          {/* Folder Name - More space for longer names */}
+          {/* Folder Name - Truncated to 5 chars with tooltip */}
           <div className="flex-1 min-w-0 mr-2">
             {renamingId === folder.id ? (
               <Input
@@ -446,14 +452,14 @@ export default function SidebarNav({
                 }`}
                 title={folder.name}
               >
-                <span className="truncate block">{folder.name}</span>
+                <span className="block" title={folder.name}>{truncateName(folder.name)}</span>
                 <span className="ml-1 text-xs text-gray-500 flex-shrink-0">({folderDocuments.length})</span>
               </button>
             )}
           </div>
 
-          {/* Action Buttons - ALWAYS VISIBLE with guaranteed space */}
-          <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {/* Action Buttons - ALWAYS VISIBLE */}
+          <div className="flex gap-1 flex-shrink-0">
             {/* Add New Doc in Folder */}
             {!isDeleteMode && (
               <button
@@ -600,7 +606,7 @@ export default function SidebarNav({
           {/* Doc Icon */}
           <FileText className="w-4 h-4 flex-shrink-0" />
 
-          {/* Document Name - Clickable, full width with truncation */}
+          {/* Document Name - Truncated to 5 chars with tooltip */}
           <div className="flex-1 min-w-0 mr-2">
             {renamingId === document.id ? (
               <Input
@@ -622,16 +628,16 @@ export default function SidebarNav({
                     actualOnSelectDocument(document.id);
                   }
                 }}
-                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors truncate block"
+                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors block"
                 title={document.title}
               >
-                {document.title}
+                {truncateName(document.title)}
               </button>
             )}
           </div>
 
           {/* Action Buttons - ALWAYS VISIBLE */}
-          <div className="flex items-center gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Rename */}
             <button
               onClick={(e) => {
@@ -676,7 +682,7 @@ export default function SidebarNav({
       {onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
-          className="absolute top-4 right-4 p-2.5 hover:bg-gray-800 rounded-lg transition-all duration-200 text-gray-400 hover:text-white z-50 shadow-md hover:shadow-lg active:scale-95 bg-gray-900/90 backdrop-blur-sm border border-gray-700"
+          className="absolute top-4 right-4 p-2.5 hover:bg-gray-800 rounded-lg transition-all duration-200 text-white bg-gray-900/95 backdrop-blur-sm border border-gray-700 z-50 shadow-lg hover:shadow-xl active:scale-95"
           title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
