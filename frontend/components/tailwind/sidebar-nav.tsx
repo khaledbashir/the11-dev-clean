@@ -708,7 +708,7 @@ export default function SidebarNav({
             placeholder="Search workspaces..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 text-xs bg-gray-900 border-gray-700 text-gray-300 placeholder:text-gray-600 flex-1"
+            className="h-8 text-xs bg-gray-900 border-gray-700 text-gray-300 placeholder:text-gray-600 max-w-xs flex-shrink-0"
           />
           <button
             onClick={() => {
