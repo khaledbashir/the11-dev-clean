@@ -419,7 +419,7 @@ export default function SidebarNav({
           </button>
 
           {/* Folder Name - More space for longer names */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 mr-2">
             {renamingId === folder.id ? (
               <Input
                 value={renameValue}
@@ -446,14 +446,14 @@ export default function SidebarNav({
                 }`}
                 title={folder.name}
               >
-                <span className="truncate">{folder.name}</span>
+                <span className="truncate block">{folder.name}</span>
                 <span className="ml-1 text-xs text-gray-500 flex-shrink-0">({folderDocuments.length})</span>
               </button>
             )}
           </div>
 
           {/* Action Buttons - ALWAYS VISIBLE with guaranteed space */}
-          <div className="flex gap-1 flex-shrink-0 ml-auto">
+          <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             {/* Add New Doc in Folder */}
             {!isDeleteMode && (
               <button
@@ -601,7 +601,7 @@ export default function SidebarNav({
           <FileText className="w-4 h-4 flex-shrink-0" />
 
           {/* Document Name - Clickable, full width with truncation */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 mr-2">
             {renamingId === document.id ? (
               <Input
                 value={renameValue}
@@ -622,7 +622,7 @@ export default function SidebarNav({
                     actualOnSelectDocument(document.id);
                   }
                 }}
-                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors truncate"
+                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors truncate block"
                 title={document.title}
               >
                 {document.title}
@@ -631,7 +631,7 @@ export default function SidebarNav({
           </div>
 
           {/* Action Buttons - ALWAYS VISIBLE */}
-          <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+          <div className="flex items-center gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             {/* Rename */}
             <button
               onClick={(e) => {
@@ -671,7 +671,7 @@ export default function SidebarNav({
   }
 
   return (
-    <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible">
+    <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible min-w-0">
       {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner - ALWAYS VISIBLE */}
       {onToggleSidebar && (
         <button
