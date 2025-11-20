@@ -584,15 +584,32 @@ export function useChatManager({
                 let contentToInsert = fullResponseContent;
                 
                 if (hasMarker) {
-                     contentToInsert = fullResponseContent.replace(/\*\*\* Insert into editor:\s*/, '');
+                     // 🎯 FIX: Split content at marker and take the part AFTER it
+                     // This ensures we discard any "thinking" logs or chat preamble before the marker
+                     const parts = fullResponseContent.split("*** Insert into editor:");
+                     if (parts.length > 1) {
+                         contentToInsert = parts[parts.length - 1];
+                     } else {
+                         contentToInsert = fullResponseContent.replace(/\*\*\* Insert into editor:\s*/, '');
+                     }
                 }
                 
                 // Process content through conversion logic
                 // Strip thinking tags before inserting into Editor
                 let filteredContent = contentToInsert;
-                filteredContent = filteredContent.replace(/<thinking>([\s\S]*?)<\/thinking>/gi, "");
-                filteredContent = filteredContent.replace(/<think>([\s\S]*?)<\/think>/gi, "");
-                filteredContent = filteredContent.replace(/<AI_THINK>([\s\S]*?)<\/AI_THINK>/gi, "");
+                
+                // 🎯 FIX: Enhanced cleaning for thinking blocks (orphaned tags)
+                filteredContent = filteredContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
+                filteredContent = filteredContent.replace(/<think>[\s\S]*?<\/think>/gi, "");
+                filteredContent = filteredContent.replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, "");
+                
+                // Clean up orphan closing tags (assumes thinking is at start)
+                if (filteredContent.includes("</think>") && !filteredContent.includes("<think>")) {
+                    filteredContent = filteredContent.replace(/^[\s\S]*?<\/think>/i, "").trim();
+                }
+                if (filteredContent.includes("</thinking>") && !filteredContent.includes("<thinking>")) {
+                    filteredContent = filteredContent.replace(/^[\s\S]*?<\/thinking>/i, "").trim();
+                }
                 
                 // Convert to TipTap JSON structure
                 let convertedContent: any;

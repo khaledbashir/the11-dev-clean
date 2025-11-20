@@ -46,25 +46,74 @@ export function convertMarkdownToNovelJSON(
 
   // 🎯 FIX: Also detect raw JSON objects (not in code blocks) - common when AI outputs JSON directly
   if (jsonMatches.length === 0) {
-    // Look for JSON objects that start with { and contain scope_name or scopes
-    const rawJsonPattern = /\{[\s\S]*?(?:"scope_name"|"scopes"|"role_allocation"|"roles")[\s\S]*?\}/g;
-    let rawMatch;
-    while ((rawMatch = rawJsonPattern.exec(markdown)) !== null) {
-      try {
-        const jsonData = JSON.parse(rawMatch[0]);
-        // Validate it's actually pricing JSON (has scope_name, scopes, or roles)
-        if (jsonData.scope_name || jsonData.scopes || jsonData.roles || jsonData.role_allocation) {
-          jsonMatches.push({
-            match: rawMatch[0],
-            json: jsonData,
-            index: rawMatch.index,
-          });
-          console.log("✅ [Editor Utils] Detected raw JSON object (not in code block)");
-          break; // Only process first valid JSON found
+    // Robust brace-counting JSON extractor to handle nested objects correctly
+    const findJsonObjects = (text: string): Array<{ match: string; json: any; index: number }> => {
+        const matches: Array<{ match: string; json: any; index: number }> = [];
+        
+        // Optimization: Scan for likely SOW keys first
+        if (!text.includes("scope_name") && !text.includes("scopes") && !text.includes("roles") && !text.includes("role_allocation")) {
+            return matches;
         }
-      } catch (e) {
-        // Not valid JSON, continue
-      }
+
+        let braceCount = 0;
+        let inString = false;
+        let isEscaped = false;
+        let currentStart = -1;
+
+        for (let i = 0; i < text.length; i++) {
+            const char = text[i];
+
+            if (isEscaped) {
+                isEscaped = false;
+                continue;
+            }
+
+            if (char === '\\') {
+                isEscaped = true;
+                continue;
+            }
+
+            if (char === '"') {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (char === '{') {
+                    if (braceCount === 0) currentStart = i;
+                    braceCount++;
+                } else if (char === '}') {
+                    braceCount--;
+                    if (braceCount === 0 && currentStart !== -1) {
+                        // Found a complete object
+                        const jsonStr = text.substring(currentStart, i + 1);
+                        try {
+                            // Basic check for SOW keys before parsing to save perf
+                            if (jsonStr.includes("scope_name") || jsonStr.includes("scopes") || jsonStr.includes("roles") || jsonStr.includes("role_allocation")) {
+                                const jsonObj = JSON.parse(jsonStr);
+                                matches.push({
+                                    match: jsonStr,
+                                    json: jsonObj,
+                                    index: currentStart
+                                });
+                                // We only need the first valid SOW JSON usually
+                                return matches; 
+                            }
+                        } catch (e) {
+                            // Invalid JSON, ignore
+                        }
+                        currentStart = -1;
+                    }
+                }
+            }
+        }
+        return matches;
+    };
+
+    const rawMatches = findJsonObjects(markdown);
+    if (rawMatches.length > 0) {
+        jsonMatches.push(...rawMatches);
+        console.log("✅ [Editor Utils] Detected raw JSON object using brace counting");
     }
   }
 
