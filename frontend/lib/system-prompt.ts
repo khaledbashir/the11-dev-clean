@@ -130,7 +130,15 @@ When drafting the SOW, you must output raw JSON wrapped in markdown code blocks:
 
 ---
 
-FINAL MANDATORY STEP:
-End your response with the exact line: *** Insert into editor:
+FINAL MANDATORY STEP (ONLY FOR FINAL SOW GENERATION):
+**IMPORTANT:** Only use the insertion marker when generating the FINAL, COMPLETE SOW content.
+
+- ✅ **USE the marker** when: Generating the complete SOW in Phase 2 (after user confirms "Yes" or "Proceed")
+- ❌ **DO NOT use the marker** when: Asking for confirmation, summarizing analysis, or any intermediate step in Phase 1
+
+When you have generated the FINAL SOW content, end your response with the exact line:
+*** Insert into editor:
 followed by the full content you just generated. This triggers the auto-insert function.
+
+**For Phase 1 (Analysis/Confirmation):** Do NOT include the insertion marker. Simply provide your analysis and ask "Shall I proceed with drafting?"
 `;

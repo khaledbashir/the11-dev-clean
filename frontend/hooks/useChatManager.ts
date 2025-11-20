@@ -18,6 +18,92 @@ import { extractSOWStructuredJson } from "@/lib/export-utils";
 import { convertMarkdownToNovelJSON } from "@/lib/editor-utils";
 import { ARCHITECT_SYSTEM_PROMPT } from "@/lib/system-prompt";
 
+/**
+ * Determines if a response is a "final" response ready for auto-insertion
+ * vs an "intermediate" response (asking questions, confirming, etc.)
+ * 
+ * @param content - The full response content
+ * @returns true if this is a final response that should be auto-inserted
+ */
+function isFinalResponse(content: string): boolean {
+    // Remove thinking/reasoning blocks for analysis
+    let cleanedContent = content
+        .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+        .replace(/<think>[\s\S]*?<\/redacted_reasoning>/gi, "")
+        .replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, "")
+        .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+        .trim();
+
+    // Check for intermediate/question indicators
+    const intermediateIndicators = [
+        /shall i proceed/i,
+        /should i proceed/i,
+        /do you want me to/i,
+        /would you like me to/i,
+        /confirm.*proceed/i,
+        /ready to proceed/i,
+        /shall we proceed/i,
+        /proceed with drafting/i,
+        /proceed with generating/i,
+        /proceed\?/i,
+        /confirm\?/i,
+        /is this correct\?/i,
+        /does this look good\?/i,
+        /would you like/i,
+        /do you want/i,
+        /any changes/i,
+        /any adjustments/i,
+        /any modifications/i,
+        /anything else/i,
+        /anything you'd like/i,
+        /let me know if/i,
+        /please confirm/i,
+        /please review/i,
+        /please let me know/i,
+    ];
+
+    // If response contains intermediate indicators, it's NOT final
+    for (const pattern of intermediateIndicators) {
+        if (pattern.test(cleanedContent)) {
+            console.log("🔍 [Selective Insert] Detected intermediate response (contains question/confirmation)");
+            return false;
+        }
+    }
+
+    // Check for final response indicators (actual SOW content)
+    const finalIndicators = [
+        /```json[\s\S]*?```/,  // JSON code block
+        /"scope_name"/,         // SOW JSON structure
+        /"roles":\s*\[/,        // Roles array in JSON
+        /"financials":\s*\{/,    // Financials object in JSON
+        /investment_overview/i,  // Investment overview field
+        /deliverables.*\[/i,    // Deliverables array
+    ];
+
+    // Must have at least one final indicator to be considered final
+    const hasFinalIndicator = finalIndicators.some(pattern => pattern.test(cleanedContent));
+
+    if (!hasFinalIndicator) {
+        console.log("🔍 [Selective Insert] No final SOW content detected - skipping auto-insert");
+        return false;
+    }
+
+    // Final check: If it has the marker AND final content, it's ready
+    const hasMarker = content.includes("*** Insert into editor:");
+    if (hasMarker && hasFinalIndicator) {
+        console.log("✅ [Selective Insert] Final response detected - will auto-insert");
+        return true;
+    }
+
+    // If it has JSON but no marker, it might still be final (legacy support)
+    if (hasFinalIndicator && !hasMarker) {
+        console.log("✅ [Selective Insert] Final response detected (JSON without marker) - will auto-insert");
+        return true;
+    }
+
+    return false;
+}
+
 interface UseChatManagerProps {
     viewMode: "editor" | "dashboard";
     currentDoc?: Document | null;
@@ -403,17 +489,23 @@ export function useChatManager({
                      };
                      setChatMessages(prev => [...prev, aiMsg]);
                      
-                     // Trigger auto-insert if markers present
-                     if (response.includes("*** Insert into editor:") || response.includes("```json")) {
+                     // 🎯 SELECTIVE AUTO-INSERTION: Only insert final responses
+                     const hasMarker = response.includes("*** Insert into editor:");
+                     const hasJSON = response.includes("```json");
+                     const isFinal = isFinalResponse(response);
+                     
+                     if ((hasMarker || hasJSON) && isFinal) {
                          // reuse existing logic
                          let contentToInsert = response;
-                         if (response.includes("*** Insert into editor:")) {
+                         if (hasMarker) {
                              contentToInsert = response.replace(/\*\*\* Insert into editor:\s*/, '');
                          }
                          // Process content through conversion logic and insert
                          extractFinancialReasoning(contentToInsert);
                          // For brevity, use handleInsertContent to insert content
                          await handleInsertContent(contentToInsert, []);
+                     } else if (hasMarker || hasJSON) {
+                         console.log("⏭️ [Selective Insert] Skipping auto-insert for intermediate response");
                      }
                      
                      setHandshakeState('idle'); // Reset
@@ -586,7 +678,7 @@ export function useChatManager({
                 // Don't show toast if it was just empty (maybe still thinking?) - but stream is done.
             }
 
-            // Optionally auto-insert content from assistant message
+            // 🎯 SELECTIVE AUTO-INSERTION: Only insert final responses, skip intermediate confirmations
             // We do this AFTER the stream completes to ensure we have the full JSON/content
             const hasMarker = fullResponseContent.includes("*** Insert into editor:");
             const hasJSON = fullResponseContent.includes("```json");
@@ -594,7 +686,10 @@ export function useChatManager({
             
             const isJsonBlock = hasJSON || startsWithBrace || hasMarker;
             
-            if (!isDashboardMode && isJsonBlock) {
+            // Check if this is a final response (not an intermediate confirmation/question)
+            const isFinal = isFinalResponse(fullResponseContent);
+            
+            if (!isDashboardMode && isJsonBlock && isFinal) {
                 let contentToInsert = fullResponseContent;
                 
                 if (hasMarker) {
