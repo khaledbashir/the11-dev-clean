@@ -1044,6 +1044,7 @@ export default function Page() {
             }));
 
             // Create workspace in local state (folders and workspaces are the same)
+            // Note: We'll add this to state later after SOW is created to avoid duplication
             const newWorkspace: Workspace = {
                 id: folderId,
                 name: workspaceName,
@@ -1054,8 +1055,6 @@ export default function Page() {
                 embedId: embedId,
                 syncedAt: new Date().toISOString(),
             };
-
-            setWorkspaces((prev) => [...prev, newWorkspace]);
 
             // IMMEDIATELY CREATE A BLANK SOW with meaningful title
             const today = new Date();
@@ -1190,8 +1189,19 @@ export default function Page() {
             // Update workspace with the SOW
             newWorkspace.sows = [newSOW];
 
-            // Update state
-            setWorkspaces((prev) => [newWorkspace, ...prev]);
+            // Update state - check if workspace already exists to avoid duplicates
+            setWorkspaces((prev) => {
+                const existingIndex = prev.findIndex(w => w.id === folderId);
+                if (existingIndex >= 0) {
+                    // Update existing workspace
+                    const updated = [...prev];
+                    updated[existingIndex] = newWorkspace;
+                    return updated;
+                } else {
+                    // Add new workspace at the beginning
+                    return [newWorkspace, ...prev];
+                }
+            });
             setCurrentWorkspaceId(folderId);
             setCurrentSOWId(sowId);
             setViewMode("editor");

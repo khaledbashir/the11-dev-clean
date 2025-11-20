@@ -390,7 +390,7 @@ export default function SidebarNav({
     return (
       <div ref={setNodeRef} style={style}>
         {/* Folder Item */}
-        <div className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-800/50 rounded-lg group relative min-w-0">
+        <div className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-800/50 rounded-lg group relative overflow-visible">
           {/* 🗑️ Multi-select Checkbox (only for client folders in delete mode) */}
           {isDeleteMode && !isProtectedFolder(folder) && (
             <input
@@ -426,7 +426,7 @@ export default function SidebarNav({
           </button>
 
           {/* Folder Name - Full name with tooltip */}
-          <div className="flex-1 min-w-0 mr-2">
+          <div className="flex-1 min-w-0 mr-2 overflow-hidden">
             {renamingId === folder.id ? (
               <Input
                 value={renameValue}
@@ -460,7 +460,7 @@ export default function SidebarNav({
           </div>
 
           {/* Action Buttons - ALWAYS VISIBLE */}
-          <div className="flex gap-1 flex-shrink-0">
+          <div className="flex gap-1 flex-shrink-0 items-center overflow-visible ml-1">
             {/* Add New Doc in Folder */}
             {!isDeleteMode && (
               <button
@@ -470,7 +470,7 @@ export default function SidebarNav({
                     actualOnCreateDocument(folder.id, 'Untitled Document');
                   }
                 }}
-                className="p-1.5 bg-gray-700/50 hover:bg-green-500/30 rounded text-green-400 hover:text-white transition-all"
+                className="p-1.5 bg-gray-700/50 hover:bg-green-500/30 rounded text-green-400 hover:text-white transition-all flex-shrink-0"
                 title="New document in this folder"
               >
                 <Plus className="w-4 h-4" />
@@ -485,7 +485,7 @@ export default function SidebarNav({
                   setRenamingId(folder.id);
                   setRenameValue(folder.name);
                 }}
-                className="p-1.5 bg-gray-700/50 hover:bg-blue-500/30 rounded text-blue-400 hover:text-white transition-all"
+                className="p-1.5 bg-gray-700/50 hover:bg-blue-500/30 rounded text-blue-400 hover:text-white transition-all flex-shrink-0"
                 title="Rename"
               >
                 <Edit3 className="w-4 h-4" />
@@ -513,7 +513,7 @@ export default function SidebarNav({
                     }
                   });
                 }}
-                className="p-1.5 bg-gray-700/50 hover:bg-red-500/30 rounded text-red-400 hover:text-white transition-all"
+                className="p-1.5 bg-gray-700/50 hover:bg-red-500/30 rounded text-red-400 hover:text-white transition-all flex-shrink-0"
                 title="Delete"
               >
                 <Trash2 className="w-4 h-4" />
@@ -593,7 +593,7 @@ export default function SidebarNav({
         }`}
       >
         {/* Document Item Row */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-visible">
           {/* Drag Handle */}
           <button
             {...attributes}
@@ -608,7 +608,7 @@ export default function SidebarNav({
           <FileText className="w-4 h-4 flex-shrink-0" />
 
           {/* Document Name - Full name with tooltip */}
-          <div className="flex-1 min-w-0 mr-2">
+          <div className="flex-1 min-w-0 mr-2 overflow-hidden">
             {renamingId === document.id ? (
               <Input
                 value={renameValue}
@@ -638,7 +638,7 @@ export default function SidebarNav({
           </div>
 
           {/* Action Buttons - ALWAYS VISIBLE */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0 overflow-visible ml-1">
             {/* Rename */}
             <button
               onClick={(e) => {
@@ -678,7 +678,7 @@ export default function SidebarNav({
   }
 
   return (
-    <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible min-w-0">
+    <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible">
       {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner - ALWAYS VISIBLE */}
       {onToggleSidebar && (
         <button
