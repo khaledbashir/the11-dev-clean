@@ -1122,8 +1122,8 @@ export default function WorkspaceChat({
 
 
             {/* Chat Messages - Scrollable Area */}
-            <ScrollArea className="flex-1 overflow-hidden">
-                <div className="p-5 space-y-5">
+            <ScrollArea className="flex-1 overflow-hidden [&>div]:scrollbar-thin">
+                <div className="p-5">
                     {!showAllMessages && chatMessages.length > MAX_MESSAGES && (
                         <div className="flex items-center justify-between text-xs text-gray-400 bg-[#0E2E33] border border-[#1b5e5e] px-3 py-2 rounded">
                             <span>
@@ -1165,13 +1165,18 @@ export default function WorkspaceChat({
                             return (
                                 <div
                                     key={msg.id}
-                                    className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                    className={`flex gap-3 mb-8 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                                 >
+                                    {msg.role === "assistant" && (
+                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#0E2E33] border border-[#1b5e5e] flex items-center justify-center mt-1">
+                                            <Bot className="h-4 w-4 text-[#1CBF79]" />
+                                        </div>
+                                    )}
                                     <div
-                                        className={`relative w-full max-w-[85%] min-w-0 rounded-lg p-4 break-words whitespace-pre-wrap overflow-x-hidden ${
+                                        className={`relative w-full max-w-[85%] min-w-0 break-words whitespace-pre-wrap overflow-x-hidden ${
                                             msg.role === "user"
-                                                ? "bg-[#0E2E33]/30 text-white border border-[#1b5e5e]"
-                                                : "bg-[#0E2E33] text-white border border-[#1b5e5e]"
+                                                ? "bg-[#0E2E33]/30 text-white border border-[#1b5e5e] rounded-lg p-4"
+                                                : "bg-white/5 text-white border border-[#1b5e5e] rounded-xl p-4"
                                         }`}
                                     >
                                         {/* Show thinking section with streaming support */}
@@ -1207,51 +1212,71 @@ export default function WorkspaceChat({
                                                     key={i}
                                                     remarkPlugins={[remarkGfm]}
                                                     components={{
-                                                        // Headings
-                                                        h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-4 mb-2 text-white" {...props} />,
-                                                        h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-3 mb-2 text-white" {...props} />,
-                                                        h3: ({node, ...props}) => <h3 className="text-base font-bold mt-2 mb-1 text-white" {...props} />,
-                                                        // Paragraphs
-                                                        p: ({node, ...props}) => <p className="text-sm text-white mb-2 leading-relaxed" {...props} />,
-                                                        // Lists
-                                                        ul: ({node, ...props}) => <ul className="list-disc list-inside text-sm text-white mb-2 pl-2" {...props} />,
-                                                        ol: ({node, ...props}) => <ol className="list-decimal list-inside text-sm text-white mb-2 pl-2" {...props} />,
-                                                        li: ({node, ...props}) => <li className="text-sm text-white mb-1" {...props} />,
+                                                        // Headings with proper spacing and leading
+                                                        h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-6 mb-4 text-white leading-tight" {...props} />,
+                                                        h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-5 mb-3 text-white leading-tight" {...props} />,
+                                                        h3: ({node, ...props}) => <h3 className="text-base font-bold mt-4 mb-2 text-white leading-tight" {...props} />,
+                                                        
+                                                        // Paragraphs with improved typography (relaxed line height, spacing, color)
+                                                        p: ({node, ...props}) => <p className="text-[15px] text-gray-200 mb-4 leading-7 break-words" {...props} />,
+                                                        
+                                                        // Lists with better spacing
+                                                        ul: ({node, ...props}) => <ul className="list-disc list-inside text-[15px] text-gray-200 mb-4 pl-2 space-y-1 break-words" {...props} />,
+                                                        ol: ({node, ...props}) => <ol className="list-decimal list-inside text-[15px] text-gray-200 mb-4 pl-2 space-y-1 break-words" {...props} />,
+                                                        li: ({node, ...props}) => <li className="leading-7" {...props} />,
+                                                        
                                                         // Tables with professional styling
                                                         table: ({node, ...props}) => (
-                                                            <div className="overflow-x-auto my-3">
-                                                                <table className="w-full border-collapse border border-[#1b5e5e]" {...props} />
+                                                            <div className="overflow-x-auto my-4 max-w-full rounded-lg border border-[#1b5e5e]/50">
+                                                                <table className="w-full border-collapse" {...props} />
                                                             </div>
                                                         ),
                                                         thead: ({node, ...props}) => <thead className="bg-[#0e2e33]" {...props} />,
                                                         th: ({node, ...props}) => (
-                                                            <th className="border border-[#1b5e5e] px-3 py-2 text-left font-bold text-white text-xs" {...props} />
+                                                            <th className="border-b border-[#1b5e5e] px-4 py-3 text-left font-semibold text-white text-xs uppercase tracking-wider break-words" {...props} />
                                                         ),
                                                         td: ({node, ...props}) => (
-                                                            <td className="border border-[#1b5e5e] px-3 py-2 text-xs text-white" {...props} />
+                                                            <td className="border-b border-[#1b5e5e]/30 px-4 py-3 text-sm text-gray-200 break-words bg-white/5" {...props} />
                                                         ),
-                                                        tr: ({node, ...props}) => <tr className="hover:bg-[#1b5e5e]/20" {...props} />,
-                                                        // Code blocks
+                                                        tr: ({node, ...props}) => <tr className="hover:bg-[#1b5e5e]/10 transition-colors" {...props} />,
+                                                        
+                                                        // Code blocks - Fixed "Breakout" Issue
                                                         code: ({node, className, children, ...props}: any) => {
                                                             const isInline = !className?.includes('language-');
+                                                            const isJsonBlock = className?.includes('language-json');
+                                                            
                                                             return isInline ? (
-                                                                <code className="bg-[#0a0a0a] text-[#20e28f] px-2 py-1 rounded text-xs font-mono" {...props}>{children}</code>
+                                                                <code className="bg-white/10 text-[#20e28f] px-1.5 py-0.5 rounded text-sm font-mono break-words" {...props}>{children}</code>
                                                             ) : (
-                                                                <code className="bg-[#0a0a0a] text-[#20e28f] block p-3 rounded text-xs font-mono overflow-x-auto mb-2 border border-[#1b5e5e]" {...props}>
-                                                                    {children}
-                                                                </code>
+                                                                <div className="rounded-md bg-[#1e1e1e] border border-gray-800 overflow-hidden my-4 shadow-sm">
+                                                                    <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-gray-800">
+                                                                        <div className="flex gap-1.5">
+                                                                            <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
+                                                                            <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
+                                                                            <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="overflow-x-auto p-4 max-w-full">
+                                                                        <code className={`block text-sm font-mono text-gray-300 whitespace-pre-wrap break-words leading-relaxed ${
+                                                                            isJsonBlock ? 'overflow-x-auto pr-20 mb-2 max-w-full' : ''
+                                                                        }`} {...props}>
+                                                                            {children}
+                                                                        </code>
+                                                                    </div>
+                                                                </div>
                                                             );
                                                         },
-                                                        pre: ({node, ...props}) => <pre className="mb-2" {...props} />,
+                                                        pre: ({node, ...props}) => <pre className="m-0 p-0 bg-transparent border-0" {...props} />,
+                                                        
                                                         // Blockquotes
                                                         blockquote: ({node, ...props}) => (
-                                                            <blockquote className="border-l-4 border-[#20e28f] pl-3 italic text-gray-300 my-2 text-sm" {...props} />
+                                                            <blockquote className="border-l-4 border-[#20e28f] pl-4 italic text-gray-400 my-4 text-[15px] break-words bg-white/5 py-2 pr-2 rounded-r" {...props} />
                                                         ),
                                                         // Strong and emphasis
-                                                        strong: ({node, ...props}) => <strong className="font-bold text-white" {...props} />,
-                                                        em: ({node, ...props}) => <em className="italic text-gray-200" {...props} />,
+                                                        strong: ({node, ...props}) => <strong className="font-bold text-white break-words" {...props} />,
+                                                        em: ({node, ...props}) => <em className="italic text-gray-300 break-words" {...props} />,
                                                         // Horizontal rules
-                                                        hr: ({node, ...props}) => <hr className="border-t border-[#1b5e5e] my-3" {...props} />,
+                                                        hr: ({node, ...props}) => <hr className="border-t border-[#1b5e5e]/50 my-6" {...props} />,
                                                     }}
                                                     className="prose prose-invert max-w-none text-sm break-words whitespace-pre-wrap prose-pre:whitespace-pre-wrap prose-pre:overflow-x-auto"
                                                 >
@@ -1314,28 +1339,31 @@ export default function WorkspaceChat({
                     
                     {/* 🎯 Thinking UI - Show when AI is generating */}
                     {isLoading && (
-                        <div className="flex gap-3 justify-start">
-                            <div className="relative w-full max-w-[85%] min-w-0 rounded-lg p-4 bg-[#0E2E33] text-white border border-[#1b5e5e]">
+                        <div className="flex gap-3 justify-start mb-8">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#0E2E33] border border-[#1b5e5e] flex items-center justify-center mt-1">
+                                                <Bot className="h-4 w-4 text-[#1CBF79]" />
+                                            </div>
+                            <div className="relative w-full max-w-[85%] min-w-0 rounded-xl p-4 bg-white/5 text-white border border-[#1b5e5e]">
                                 <div className="space-y-3">
                                     {/* Thinking Accordion */}
                                     <div className="bg-[#0e0f0f] border border-[#1b5e5e] rounded-lg overflow-hidden">
                                         <div className="px-4 py-3 bg-[#0E2E33] border-b border-[#1b5e5e]">
                                             <div className="flex items-center gap-2">
-                                                <Loader2 className="h-4 w-4 animate-spin text-[#1CBF79]" />
+                                                <Loader2 className="h-4 w-4 animate-spin text-purple-500" />
                                                 <span className="text-sm font-medium text-white">AI is thinking...</span>
                                             </div>
                                         </div>
                                         <div className="px-4 py-3 space-y-2">
                                             <div className="flex items-center gap-2 text-xs text-gray-400">
-                                                <div className="w-1.5 h-1.5 bg-[#1CBF79] rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                                                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
                                                 <span>Analyzing your request...</span>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs text-gray-400">
-                                                <div className="w-1.5 h-1.5 bg-[#1CBF79] rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></div>
+                                                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></div>
                                                 <span>Checking rate card and budget...</span>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs text-gray-400">
-                                                <div className="w-1.5 h-1.5 bg-[#1CBF79] rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></div>
+                                                <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></div>
                                                 <span>Drafting SOW content...</span>
                                             </div>
                                         </div>
@@ -1351,7 +1379,7 @@ export default function WorkspaceChat({
 
 
             {/* Input Area */}
-            <div className="p-5 border-t border-[#0E2E33] bg-[#0e0f0f] space-y-3">
+            <div className="px-5 pt-4 pb-5 border-t border-[#0E2E33] bg-[#0e0f0f] space-y-3">
                 {/* Toggle Upload Area Button - Always Visible */}
                 <div className="flex items-center justify-between">
                     <button
@@ -1625,7 +1653,7 @@ export default function WorkspaceChat({
                     </div>
                 )}
 
-                {/* Chat Input */}
+                {/* Chat Input - Floating Design */}
                 <div className="flex gap-2 items-end">
                     {/* File attachment input (for inline attachments) */}
                     <input
@@ -1649,61 +1677,63 @@ export default function WorkspaceChat({
                     />
 
                     <div className="flex-1 relative">
-                        <Textarea
-                            ref={chatInputRef}
-                            value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            onKeyPress={handleKeyPress}
-                            placeholder="Type /help for commands..."
-                            className="min-h-[50px] max-h-[150px] resize-none text-sm bg-[#0E2E33] border-[#0E2E33] text-white placeholder:text-gray-400 rounded-lg pr-24 pl-10"
-                        />
+                        <div className="bg-[#0E2E33] border border-[#1b5e5e] rounded-2xl px-4 py-3 flex items-end gap-2">
+                            {/* File attachment icon - positioned on the left */}
+                            <button
+                                onClick={handleDocumentUploadClick}
+                                disabled={uploading || (!editorWorkspaceSlug && !onFileUpload)}
+                                className="flex-shrink-0 p-1.5 rounded-md hover:bg-[#1b5e5e]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                title="Upload document to workspace (PDF, Word, Text)"
+                            >
+                                {uploading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                                ) : (
+                                    <Paperclip className="h-4 w-4 text-gray-400 hover:text-white" />
+                                )}
+                            </button>
 
-                        {/* File attachment icon - positioned inside textarea on the left */}
-                        <button
-                            onClick={handleDocumentUploadClick}
-                            disabled={uploading || (!editorWorkspaceSlug && !onFileUpload)}
-                            className="absolute left-3 bottom-3 p-1.5 rounded-md hover:bg-[#1b5e5e]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            title="Upload document to workspace (PDF, Word, Text)"
-                        >
-                            {uploading ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                            ) : (
-                                <Paperclip className="h-4 w-4 text-gray-400 hover:text-white" />
-                            )}
-                        </button>
+                            <Textarea
+                                ref={chatInputRef}
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                onKeyPress={handleKeyPress}
+                                placeholder="Type /help for commands..."
+                                className="flex-1 min-h-[50px] max-h-[150px] resize-none text-sm bg-transparent border-0 text-white placeholder:text-gray-400 focus-visible:ring-0 focus-visible:ring-offset-0 pr-20"
+                            />
 
-                        {/* Enhance button - positioned inside textarea on the right */}
-                        <button
-                            onClick={handleEnhanceOnly}
-                            disabled={
-                                !chatInput.trim() || isLoading || enhancing
-                            }
-                            className="absolute right-12 bottom-3 p-1.5 rounded-md bg-[#1b1b1e] hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-[#1CBF79]/30 hover:border-[#1CBF79]/60"
-                            title="Enhance your prompt with AI"
-                        >
-                            {enhancing ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1CBF79]" />
-                            ) : (
-                                <span className="text-[#1CBF79] text-sm">
-                                    ✨
-                                </span>
-                            )}
-                        </button>
+                            {/* Enhance button - positioned inside on the right */}
+                            <button
+                                onClick={handleEnhanceOnly}
+                                disabled={
+                                    !chatInput.trim() || isLoading || enhancing
+                                }
+                                className="flex-shrink-0 p-1.5 rounded-md hover:bg-[#1b5e5e]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                title="Enhance your prompt with AI"
+                            >
+                                {enhancing ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1CBF79]" />
+                                ) : (
+                                    <span className="text-[#1CBF79] text-sm">
+                                        ✨
+                                    </span>
+                                )}
+                            </button>
 
-                        {/* Send button - positioned inline on the right */}
-                        <Button
-                            onClick={handleSendMessage}
-                            disabled={!chatInput.trim() || isLoading}
-                            size="sm"
-                            className="absolute right-2 bottom-2 bg-[#15a366] hover:bg-[#10a35a] active:bg-[#0d8f4d] text-white h-9 px-4 font-semibold border-0 text-sm transition-all duration-200 shadow-sm hover:shadow-md"
-                            title="Send message to The Architect"
-                        >
-                            {isLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Send className="h-4 w-4" />
-                            )}
-                        </Button>
+                            {/* Send button - positioned inside on the right */}
+                            <Button
+                                onClick={handleSendMessage}
+                                disabled={!chatInput.trim() || isLoading}
+                                size="sm"
+                                className="flex-shrink-0 bg-[#15a366] hover:bg-[#10a35a] active:bg-[#0d8f4d] text-white h-9 w-9 p-0 font-semibold border-0 transition-all duration-200 shadow-sm hover:shadow-md rounded-lg"
+                                title="Send message to The Architect"
+                            >
+                                {isLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Send className="h-4 w-4" />
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
