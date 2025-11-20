@@ -50,6 +50,13 @@ function isFinalResponse(content: string): boolean {
         /investment_overview/i,  // Investment overview field
         /deliverables.*\[/i,    // Deliverables array
         /^\s*\{/,              // Starts with JSON object
+        // Markdown SOW format indicators
+        /^Client:\s*\w+/i,     // Starts with "Client: [Name]"
+        /\[PROJECT_OVERVIEW\]/i, // Project overview section
+        /\[PROJECT_OBJECTIVES\]/i, // Project objectives section
+        /\[INVESTMENT_OVERVIEW\]/i, // Investment overview section
+        /Scope \d+:/i,          // Scope sections (Scope 1:, Scope 2:, etc.)
+        /^\*\*Scope \d+:/i,     // Scope sections with markdown bold
     ];
 
     // Check if it has actual SOW content
@@ -525,6 +532,14 @@ export function useChatManager({
                      
                      // 🎯 SELECTIVE AUTO-INSERTION: Only insert final responses
                      const isFinal = isFinalResponse(response);
+                     console.log(`🔍 [Selective Insert] Response analysis:`, {
+                         isFinal,
+                         responseLength: response.length,
+                         hasClient: /^Client:\s*\w+/i.test(response),
+                         hasProjectOverview: /\[PROJECT_OVERVIEW\]/i.test(response),
+                         hasJson: /```json[\s\S]*?```/.test(response) || /"scope_name"/.test(response),
+                         first200Chars: response.substring(0, 200)
+                     });
                      
                      if (isFinal) {
                          // Extract content after marker if present
@@ -534,11 +549,15 @@ export function useChatManager({
                              const parts = response.split("*** Insert into editor:");
                              contentToInsert = parts.length > 1 ? parts[parts.length - 1] : response.replace(/\*\*\* Insert into editor:\s*/, '');
                          }
+                         
+                         console.log(`✅ [Selective Insert] Inserting content into editor (length: ${contentToInsert.length})`);
+                         
                          // Process content through conversion logic and insert
                          extractFinancialReasoning(contentToInsert);
                          await handleInsertContent(contentToInsert, []);
                      } else {
                          console.log("⏭️ [Selective Insert] Skipping auto-insert for intermediate response");
+                         console.log("⏭️ [Selective Insert] Response preview:", response.substring(0, 300));
                      }
                      
                      setHandshakeState('idle'); // Reset
