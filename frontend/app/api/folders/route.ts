@@ -41,18 +41,22 @@ export async function POST(request: NextRequest) {
                   ? parseInt(embedId, 10)
                   : null;
 
-        // 🛑 VALIDATION: workspaceSlug is mandatory
-        if (!workspaceSlug) {
-             // Silent validation - don't spam logs for expected cases (e.g., initial load checks)
-             // Only log if this appears to be an actual user-initiated action
-             const isUserAction = name && name.trim().length > 0;
-             if (isUserAction) {
-                 console.error("❌ Missing workspaceSlug in create folder request for:", name);
-             }
+        // 🛑 VALIDATION: Handle special case for Unfiled folder (workspaceSlug can be null)
+        const isUnfiledFolder = id === 'unfiled-default' || name === 'Unfiled';
+        
+        if (!workspaceSlug && !isUnfiledFolder) {
+             // 🛡️ SILENT VALIDATION: Don't log errors for initialization/startup calls
+             // Only return error response - no console logging to prevent log spam
+             // This handles cases where the app is still initializing and workspaceSlug isn't available yet
              return NextResponse.json(
                 { error: "workspaceSlug is required" },
                 { status: 400 }
              );
+        }
+        
+        // ✅ Allow Unfiled folder creation without workspaceSlug (no AnythingLLM integration needed)
+        if (isUnfiledFolder && !workspaceSlug) {
+            console.log('📁 Creating Unfiled folder (no workspace integration needed)');
         }
 
         // 🔧 CRITICAL FIX: Handle duplicate workspace_slug gracefully

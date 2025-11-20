@@ -6,6 +6,7 @@ import { Input } from "./ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { ScrollArea } from "./ui/scroll-area";
 import { toast } from "sonner";
+import { debug } from "@/lib/logger";
 import type { Workspace, SOW } from "@/lib/types/sow";
 import {
   ChevronDown,
@@ -703,7 +704,7 @@ export default function SidebarNav({
                 );
 
                 return (
-                  <div className="space-y-1 workspaces-section">
+                  <div className="space-y-1 w-full min-w-0">
                     <div
                       className="w-full flex items-center gap-2 px-2 py-1.5 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors cursor-pointer"
                       onClick={() => setFoldersExpanded(!foldersExpanded)}
