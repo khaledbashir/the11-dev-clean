@@ -1445,14 +1445,25 @@ You have access to the full SOW document that has been embedded in this workspac
                     ? process.env.NEXT_PUBLIC_OPENROUTER_MODEL_PREF
                     : model;
 
+            // Get API key - check both client-side and server-side env vars
+            const apiKey = this.apiKey || 
+                (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY) ||
+                (typeof process !== 'undefined' && process.env.ANYTHINGLLM_API_KEY);
+
+            if (!apiKey) {
+                console.error(`❌ Missing API key for OpenAI endpoint. Check NEXT_PUBLIC_ANYTHINGLLM_API_KEY or ANYTHINGLLM_API_KEY environment variable.`);
+                return null;
+            }
+
             console.log(`🤖 Calling OpenAI compatible endpoint: ${endpoint}`);
             console.log(`   Model: ${preferredModel}`);
+            console.log(`   API Key: ${apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING'}`);
             
             const response = await fetch(endpoint, {
                 method: "POST",
                 headers: {
-                    ...this.getHeaders(),
                     "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify({
                     model: preferredModel,
