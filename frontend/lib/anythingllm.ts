@@ -15,10 +15,11 @@ const ANYTHINGLLM_BASE_URL =
 
 const ANYTHINGLLM_API_KEY = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
 
-// Security validation: Ensure API key is set
+// Security validation: Ensure API key is set (but don't throw error during module load)
+// We'll validate at runtime when making API calls instead
 if (!ANYTHINGLLM_API_KEY) {
-    throw new Error(
-        "Security Error: ANYTHINGLLM_API_KEY environment variable is required but not set.",
+    console.warn(
+        "Warning: NEXT_PUBLIC_ANYTHINGLLM_API_KEY environment variable is not set. API calls will fail at runtime.",
     );
 }
 
@@ -1454,8 +1455,8 @@ You have access to the full SOW document that has been embedded in this workspac
             // Priority 1: Check client-side accessible env var (always available in browser)
             if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY) {
                 const envKey = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
-                // Validate it's not a placeholder string
-                if (envKey && envKey !== 'undefined' && envKey.trim() !== '') {
+                // Validate it's not a placeholder string or undefined
+                if (envKey && envKey !== 'undefined' && envKey.trim() !== '' && envKey !== 'your_anythingllm_api_key_here') {
                     apiKey = envKey;
                 }
             }
@@ -1463,7 +1464,7 @@ You have access to the full SOW document that has been embedded in this workspac
             // Priority 2: Check server-side env var (for SSR)
             if ((!apiKey || apiKey === 'undefined' || apiKey === '') && typeof process !== 'undefined' && process.env.ANYTHINGLLM_API_KEY) {
                 const envKey = process.env.ANYTHINGLLM_API_KEY;
-                if (envKey && envKey !== 'undefined' && envKey.trim() !== '') {
+                if (envKey && envKey !== 'undefined' && envKey.trim() !== '' && envKey !== 'your_anythingllm_api_key_here') {
                     apiKey = envKey;
                 }
             }
@@ -1471,7 +1472,7 @@ You have access to the full SOW document that has been embedded in this workspac
             // Priority 3: Fall back to instance key (from constructor)
             if ((!apiKey || apiKey === 'undefined' || apiKey === '') && this.apiKey) {
                 const instanceKey = this.apiKey;
-                if (instanceKey && instanceKey !== 'undefined' && instanceKey.trim() !== '') {
+                if (instanceKey && instanceKey !== 'undefined' && instanceKey.trim() !== '' && instanceKey !== 'your_anythingllm_api_key_here') {
                     apiKey = instanceKey;
                 }
             }
@@ -1481,9 +1482,13 @@ You have access to the full SOW document that has been embedded in this workspac
                 this.apiKey = apiKey;
             }
 
-            // Final validation
-            if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
-                console.error(`❌ Missing API key for OpenAI endpoint. Check NEXT_PUBLIC_ANYTHINGLLM_API_KEY environment variable.`);
+            // Final validation - be more explicit about what's wrong
+            if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '' || apiKey === 'your_anythingllm_api_key_here') {
+                console.error(`❌ Missing or invalid API key for OpenAI endpoint.`);
+                console.error(`   - NEXT_PUBLIC_ANYTHINGLLM_API_KEY: ${typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY || 'NOT_SET') : 'PROCESS_UNDEFINED'}`);
+                console.error(`   - ANYTHINGLLM_API_KEY: ${typeof process !== 'undefined' ? (process.env.ANYTHINGLLM_API_KEY || 'NOT_SET') : 'PROCESS_UNDEFINED'}`);
+                console.error(`   - Instance key: ${this.apiKey ? 'SET' : 'NOT_SET'}`);
+                console.error(`   Check your environment variables in EasyPanel frontend service.`);
                 return null;
             }
 
