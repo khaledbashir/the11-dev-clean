@@ -71,6 +71,11 @@ export default function RateCardManagementPage() {
 
             if (result.success) {
                 setRoles(result.data);
+                
+                // Show warning if no roles found
+                if (result.data.length === 0) {
+                    setError("⚠️ No roles found in database. Click 'Seed Database' to populate with official rate card.");
+                }
             } else {
                 setError(result.error || "Failed to fetch rate card roles");
             }
@@ -78,6 +83,41 @@ export default function RateCardManagementPage() {
             setError(err.message || "An error occurred while fetching roles");
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Seed database with official roles
+    const handleSeedDatabase = async () => {
+        if (!confirm("This will seed the database with 90 official Social Garden roles. Continue?")) {
+            return;
+        }
+
+        setSubmitting(true);
+        setError(null);
+        setSuccess(null);
+
+        try {
+            const response = await fetch("/api/admin/rate-card/seed", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                setSuccess(
+                    `Database seeded successfully! ${result.stats.totalActiveRoles} roles are now available.`
+                );
+                // Reload roles to show them in the table
+                await fetchRoles();
+                setTimeout(() => setSuccess(null), 5000);
+            } else {
+                setError(result.error || "Failed to seed database");
+            }
+        } catch (err: any) {
+            setError(err.message || "An error occurred while seeding the database");
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -352,16 +392,28 @@ export default function RateCardManagementPage() {
                             </h2>
                             <p className="text-slate-600 text-sm mt-1">
                                 {roles.length} active role{roles.length !== 1 ? "s" : ""}
+                                {roles.length === 0 && " - Database appears empty!"}
                             </p>
                         </div>
-                        <button
-                            onClick={handleAddNew}
-                            disabled={showForm}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors font-medium"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Add Role
-                        </button>
+                        <div className="flex gap-3">
+                            {roles.length === 0 && (
+                                <button
+                                    onClick={handleSeedDatabase}
+                                    disabled={submitting}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors font-medium"
+                                >
+                                    {submitting ? "Seeding..." : "🌱 Seed Database"}
+                                </button>
+                            )}
+                            <button
+                                onClick={handleAddNew}
+                                disabled={showForm}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed transition-colors font-medium"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Add Role
+                            </button>
+                        </div>
                     </div>
 
                     {loading ? (
@@ -371,10 +423,26 @@ export default function RateCardManagementPage() {
                         </div>
                     ) : roles.length === 0 ? (
                         <div className="p-12 text-center">
-                            <p className="text-slate-600 text-lg">No roles found</p>
-                            <p className="text-slate-500 text-sm mt-2">
-                                Click "Add Role" to create your first rate card entry
+                            <p className="text-slate-600 text-lg font-semibold mb-2">⚠️ Database is Empty</p>
+                            <p className="text-slate-500 text-sm mb-4">
+                                The rate card database has no roles. Click "Seed Database" to populate it with 90 official Social Garden roles.
                             </p>
+                            <button
+                                onClick={handleSeedDatabase}
+                                disabled={submitting}
+                                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors font-medium mx-auto"
+                            >
+                                {submitting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        Seeding Database...
+                                    </>
+                                ) : (
+                                    <>
+                                        🌱 Seed Database (90 Roles)
+                                    </>
+                                )}
+                            </button>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">

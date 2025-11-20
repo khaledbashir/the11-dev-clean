@@ -125,11 +125,60 @@ export async function POST(request: NextRequest) {
             console.log("🤖 [@Agent] Agent invocation detected in user message");
         }
 
-        // 🎯 PERFECT MIRROR: NO PROMPT INJECTION
-        // The system prompt is configured ONCE in the AnythingLLM workspace during setup
-        // Rate card and other documents should be embedded via document upload/pinning
-        // Analytics data should be embedded as documents or configured in workspace
-        // We send ONLY the user's plain text message - AnythingLLM handles the rest
+        // 💰 DYNAMIC RATE CARD INJECTION (P0 - CRITICAL)
+        // For SOW generation workspaces, inject rate card context dynamically
+        // This ensures AI always uses the most up-to-date rates from database
+        const isSOWWorkspace = effectiveWorkspaceSlug === "sow-generator" || 
+                               effectiveWorkspaceSlug.includes("sow") ||
+                               !effectiveWorkspaceSlug.includes("dashboard");
+
+        if (isSOWWorkspace && !effectiveWorkspaceSlug.includes("dashboard")) {
+            try {
+                console.log("💰 [Rate Card Injection] Fetching rate card from database...");
+                
+                // Determine base URL for API call (server-side)
+                const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+                               process.env.NEXT_PUBLIC_API_URL || 
+                               new URL(request.url).origin;
+                
+                console.log(`💰 [Rate Card Injection] Base URL: ${baseUrl}`);
+                
+                const rateCardResponse = await fetch(`${baseUrl}/api/rate-card/markdown`, {
+                    cache: 'no-store', // Always fetch fresh data
+                });
+                
+                if (!rateCardResponse.ok) {
+                    throw new Error(`Rate card API returned ${rateCardResponse.status}`);
+                }
+                
+                const rateCardData = await rateCardResponse.json();
+
+                if (rateCardData.success && rateCardData.markdown) {
+                    console.log(`✅ [Rate Card Injection] Rate card fetched: ${rateCardData.roleCount} roles`);
+                    
+                    // Format message with clear SYSTEM_DATA_INJECTION marker
+                    messageToSend = `[SYSTEM_DATA_INJECTION: OFFICIAL_RATE_CARD_PRICING]
+
+${rateCardData.markdown}
+
+---
+
+[USER_MESSAGE]
+${messageToSend}`;
+
+                    console.log(`✅ [Rate Card Injection] Rate card injected into message (${rateCardData.roleCount} roles)`);
+                } else {
+                    console.warn("⚠️ [Rate Card Injection] Failed to fetch rate card, proceeding without it");
+                }
+            } catch (error: any) {
+                console.error("❌ [Rate Card Injection] Error fetching rate card:", error.message);
+                // Continue without rate card - don't block the request
+            }
+        }
+
+        // 🎯 PERFECT MIRROR: System prompt configured ONCE in workspace
+        // Rate card injected dynamically above, not in system prompt
+        // This keeps system prompt clean and ensures rate card is always up-to-date
 
         // Determine the endpoint based on whether this is thread-based chat
         let endpoint: string;

@@ -1,0 +1,240 @@
+# Cursor Rules - SOW Workbench Project
+
+## 🏗️ Infrastructure Architecture
+
+### Easypanel Services (3 Services)
+
+This project runs on **Easypanel** with **3 separate services** that auto-deploy on every push:
+
+1. **Frontend Service** (`sow-qandu-me`)
+   - Repository: `khaledbashir/the11-dev-clean`
+   - Branch: `sow-latest`
+   - Build Path: `/`
+   - Source: GitHub → Auto-deploys on push
+   - URL: `https://sow.qandu.me`
+
+2. **Backend Service** (`socialgarden-backend`)
+   - Repository: `khaledbashir/the11-dev-clean`
+   - Branch: `backend-service`
+   - Build Path: `/backend`
+   - Source: GitHub → Auto-deploys on push
+   - URL: `https://ahmad-socialgarden-backend.840tjq.easypanel.host`
+
+3. **MySQL Database** (`mysql-database`)
+   - Service Type: MySQL
+   - Internal Host: `ahmad_mysql-database`
+   - Port: `3306`
+   - Database: `socialgarden_sow`
+   - User: `sg_sow_user`
+
+### Auto-Deployment
+
+**Every push to GitHub automatically triggers a rebuild on Easypanel:**
+- Push to `sow-latest` → Frontend redeploys
+- Push to `backend-service` → Backend redeploys
+- No manual deployment needed
+
+---
+
+## 🔐 Environment Variables
+
+### Frontend Service Environment Variables
+
+**Location:** Easypanel → `sow-qandu-me` → Environment → Add Variables
+
+```bash
+# Database Connection (Internal Docker Network)
+DB_HOST=ahmad_mysql-database
+DB_USER=sg_sow_user
+DB_PASSWORD=<GET_FROM_EASYPANEL_FRONTEND_ENV>
+DB_NAME=socialgarden_sow
+DB_PORT=3306
+
+# Application URLs
+NEXT_PUBLIC_BASE_URL=https://sow.qandu.me
+NEXT_PUBLIC_API_URL=https://sow.qandu.me
+
+# AnythingLLM Integration (REQUIRED)
+NEXT_PUBLIC_ANYTHINGLLM_URL=https://ahmad-anything-llm.840tjq.easypanel.host
+NEXT_PUBLIC_ANYTHINGLLM_API_KEY=<GET_FROM_EASYPANEL_FRONTEND_ENV>
+
+# PDF Service
+NEXT_PUBLIC_PDF_SERVICE_URL=https://ahmad-socialgarden-backend.840tjq.easypanel.host
+
+# AI Provider Configuration (OpenRouter)
+OPENROUTER_API_KEY=<GET_FROM_EASYPANEL_FRONTEND_ENV>
+OPENROUTER_MODEL_PREF=moonshotai/kimi-k2-instruct
+```
+
+### Backend Service Environment Variables
+
+**Location:** Easypanel → `socialgarden-backend` → Environment → Add Variables
+
+```bash
+# Database Connection (Internal Docker Network)
+DB_HOST=ahmad_mysql-database
+DB_USER=sg_sow_user
+DB_PASSWORD=<GET_FROM_EASYPANEL_BACKEND_ENV>
+DB_NAME=socialgarden_sow
+DB_PORT=3306
+
+# AnythingLLM Integration
+ANYTHINGLLM_URL=https://ahmad-anything-llm.840tjq.easypanel.host
+ANYTHINGLLM_API_KEY=<GET_FROM_EASYPANEL_BACKEND_ENV>
+
+# AI Provider Configuration (Multiple providers configured)
+OPENROUTER_API_KEY=<GET_FROM_EASYPANEL_BACKEND_ENV>
+OPENROUTER_MODEL_PREF=moonshotai/kimi-k2-instruct
+ZAI_API_KEY=<GET_FROM_EASYPANEL_BACKEND_ENV>
+ZAI_MODEL_PREF=glm-4.6
+GROQ_API_KEY=<GET_FROM_EASYPANEL_BACKEND_ENV>
+GROQ_MODEL_PREF=moonshotai/kimi-k2-instruct
+```
+
+### Database Credentials
+
+**Location:** Easypanel → `mysql-database` → Credentials
+
+```
+User: sg_sow_user
+Password: <GET_FROM_EASYPANEL_MYSQL_CREDENTIALS>
+Database Name: socialgarden_sow
+Root Password: <GET_FROM_EASYPANEL_MYSQL_CREDENTIALS>
+Internal Host: ahmad_mysql-database
+Internal Port: 3306
+Internal Connection URL: <GET_FROM_EASYPANEL_MYSQL_CREDENTIALS>
+```
+
+**Note:** All sensitive credentials (passwords, API keys) should be retrieved from Easypanel service environment variables or credentials section. Never commit actual secrets to the repository.
+
+---
+
+## 🎯 Project End Goal
+
+**Reference:** `COMPLETE-IMPLEMENTATION-GUIDE.md`
+
+### The Goal
+Build a **Production-Grade SOW (Statement of Work) Workbench** that meets a strict **23-point checklist** covering:
+
+1. **Content & Structure**
+   - Standard SOW format (Overview, Objectives, Deliverables, Timeline, Pricing)
+   - Brief uploads (PDF/Docx via chat interface)
+   - Bespoke deliverables (AI generates specific content from briefs)
+   - Versatility (Handles CRM Audits, Email Builds, Chatbots, etc.)
+
+2. **Pricing & Logic**
+   - Rate card accuracy (100% match to official rate card)
+   - Granularity (Tasks assigned to specific Producer/Specialist roles)
+   - Budget adherence (AI checks budget and scales hours accordingly)
+   - Mandatory layers (Project Mgmt & Account Mgmt always included)
+   - Math (Discount → Subtotal → GST calculation order)
+
+3. **App Functionality**
+   - Data binding (Chat JSON instantly populates Editable Table)
+   - Editability (Drag-and-drop reordering, editable hours/rates)
+   - PDF Export (Professional, branded with Plus Jakarta Sans font)
+   - CSV Export (Available via API)
+   - Persistence (All SOWs saved to database, auto-save enabled)
+
+### Architecture Principles
+
+**Client = Workspace, SOW = Thread**
+- Each client has a **dedicated workspace** for data isolation
+- Each SOW is a **dedicated thread** within that client's workspace
+- Workspace contains: System prompt (Architect instructions + Rate Card) + Client-specific uploaded documents
+- Thread contains: Conversation history for that specific SOW
+
+**Key Files:**
+- `frontend/lib/anythingllm.ts` - AnythingLLM integration, workspace/thread management
+- `frontend/lib/editor-utils.ts` - Markdown → TipTap JSON conversion, pricing table parsing
+- `frontend/lib/rateCard.ts` - Official rate card (single source of truth)
+- `frontend/hooks/useChatManager.ts` - Chat message handling, auto-insert logic
+- `frontend/app/page.tsx` - Main application, SOW creation workflow
+- `frontend/components/sow/SOWPdfExport.tsx` - PDF generation with branding
+
+---
+
+## 📚 Documentation & Knowledge Base
+
+### AnythingLLM Documentation in RAG System
+
+**IMPORTANT:** The entire AnythingLLM API documentation is stored in a RAG (Retrieval-Augmented Generation) knowledge base system.
+
+**Before making assumptions or guessing about AnythingLLM:**
+1. **ASK THE USER** for specific AnythingLLM API details
+2. The user can query the RAG system to get **definitive answers** instead of guessing
+3. This ensures accuracy and prevents implementation errors
+
+**Example Questions to Ask:**
+- "What is the exact endpoint for creating a thread in AnythingLLM?"
+- "What are the required parameters for the workspace update API?"
+- "How does AnythingLLM handle document embedding confirmation?"
+- "What is the response format for the chat streaming endpoint?"
+
+**Rule:** When working with AnythingLLM integration, **always ask first** rather than guessing. The RAG system has the complete, accurate documentation.
+
+---
+
+## 🔄 Git Workflow
+
+### Repository Structure
+
+**Primary Repository:** `khaledbashir/the11-dev-clean`
+
+**Branches:**
+- `sow-latest` → Frontend service (auto-deploys)
+- `backend-service` → Backend service (auto-deploys)
+
+**Remote Configuration:**
+- Only `origin` remote exists → `https://github.com/khaledbashir/the11-dev-clean.git`
+- No other remotes configured
+
+### Commit & Push Workflow
+
+1. Make changes in `/root/the11-dev`
+2. Stage files: `git add <files>`
+3. Commit: `git commit -m "descriptive message"`
+4. Push: `git push origin sow-latest` (or `backend-service`)
+5. Easypanel automatically rebuilds the service
+
+---
+
+## ⚠️ Critical Rules for AI Assistants
+
+1. **Always verify environment variables** match the configuration above before suggesting changes
+2. **Ask about AnythingLLM** before implementing integration features - use the RAG system
+3. **Respect data isolation** - Client = Workspace, SOW = Thread (never share workspaces)
+4. **Check the implementation guide** (`COMPLETE-IMPLEMENTATION-GUIDE.md`) for architecture decisions
+5. **Test changes** considering the 3-service architecture (frontend, backend, database)
+6. **Remember auto-deployment** - every push triggers a rebuild, so be careful with breaking changes
+
+---
+
+## 🐛 Debugging Tips
+
+### Service Communication
+- Frontend → Backend: Uses `NEXT_PUBLIC_PDF_SERVICE_URL`
+- Frontend → Database: Uses `DB_HOST=ahmad_mysql-database` (internal Docker network)
+- Frontend → AnythingLLM: Uses `NEXT_PUBLIC_ANYTHINGLLM_URL`
+- Backend → Database: Uses `DB_HOST=ahmad_mysql-database` (internal Docker network)
+
+### Common Issues
+- **Database connection fails:** Check if using `ahmad_mysql-database` (internal hostname, not external)
+- **AnythingLLM errors:** Verify API key and URL are correct in environment variables
+- **Auto-deploy not working:** Check Easypanel service logs and GitHub webhook configuration
+- **CORS issues:** Verify `NEXT_PUBLIC_BASE_URL` matches the actual domain
+
+---
+
+**Last Updated:** January 2025  
+**Repository:** `the11-dev-clean`  
+**Status:** Production-Ready
+
+# ez.md
+
+Rule description here...
+
+## Guidelines
+
+- Guideline 1
+- Guideline 2

@@ -1,0 +1,188 @@
+This documentation provides the essential technical architecture and implementation mandates for integrating the Social Garden SOW Generator platform with AnythingLLM, focusing specifically on compliance with the **Perfect Mirror** philosophy and the **Guaranteed System Reliability** pillar.
+
+This guide translates the high-level requirements from the "Comprehensive Project Overview" into actionable technical specifications for the AI Coder.
+
+---
+
+## ANYTHINGLLM INTEGRATION DOCUMENTATION: SOW GENERATOR
+
+The architecture mandate for the SOW Generator is **Client = Workspace, SOW = Thread**. This governs all initialization and chat sequences.
+
+**CRITICAL NOTE:** All API endpoints require the `/api` prefix. The base URL pattern is: `${ANYTHINGLLM_BASE_URL}/api/v1/...`
+
+### 1. Core Architectural Mapping & Persistence
+
+The application must maintain a "Perfect Mirror" state of the client data within AnythingLLM's infrastructure.
+
+| Application Component | AnythingLLM Entity | Purpose/API |
+| :--- | :--- | :--- |
+| **Client/Workspace** | **Workspace (slug)** | **1:1 MIRROR** - Each client workspace in the app = unique AnythingLLM workspace. Container for data isolation and permanent configuration (System Prompt, Rate Card). |
+| **SOW** | **Thread (threadSlug)** | **1:1 MIRROR** - Each SOW in the app = unique thread within its client's workspace. Stores specific conversation history (rolling history) for iterative refinement. |
+| **Document Brief** | **Embedded Document** | Provides RAG context for analysis. Uploaded via `multipart/form-data` or `raw-text` endpoint. Embedded in the client's workspace. |
+
+#### Required Setup Sequence (`anythingllm.ts` / `page.tsx`)
+
+1.  **Create Workspace:** Call `POST /api/v1/workspace/new` to create the client container (e.g., `nidaaa`).
+    - **Endpoint:** `${baseUrl}/api/v1/workspace/new`
+    - **Payload:** `{ name: string, slug?: string }`
+    - **Response:** `{ workspace: { id, name, slug } }`
+
+2.  **Configure Brain:** Immediately update the workspace using `POST /api/v1/workspace/{slug}/update` to set:
+    - **Architect System Prompt** (`openAiPrompt`)
+    - `openAiTemp` (0.7 for consistency)
+    - `openAiHistory` (20)
+    - `llmProvider: "generic-openai"`
+    - `llmModel: "glm-4.6"`
+    - **Endpoint:** `${baseUrl}/api/v1/workspace/${workspaceSlug}/update`
+    - **Payload:** `{ openAiPrompt, openAiTemp, openAiHistory, llmProvider, llmModel }`
+
+3.  **Create Thread:** Call `POST /api/v1/workspace/{slug}/thread/new` to initiate a unique conversation history for the new SOW.
+    - **Endpoint:** `${baseUrl}/api/v1/workspace/${workspaceSlug}/thread/new`
+    - **Payload:** `{ name: string }` (threads auto-rename on first message)
+    - **Response:** `{ thread: { id, slug, name } }`
+    - **CRITICAL:** The returned `threadSlug` must be persisted in the local application database.
+
+4.  **Embed Rate Card:** Embed the official Social Garden rate card into the workspace for RAG context.
+    - **Process:** Upload via `POST /api/v1/document/raw-text`, then link via `POST /api/v1/workspace/{slug}/update-embeddings`
+    - **Deduplication:** Check if rate card already exists before embedding to avoid duplicates.
+
+### 2. LLM Configuration and Context Injection
+
+The system utilizes a specialized configuration to enforce **Unquestionable Financial Adherence** and **Deterministic Output**.
+
+#### A. Centralized LLM and Embedding Configuration
+
+The LLM and Embedding models are centrally defined and must be respected by all workspaces, achieved through the **Workspace Settings Mirroring** mandate:
+
+*   **LLM Provider:** `generic-openai`
+*   **LLM Model:** `glm-4.6`
+*   **Embedding Engine:** `ollama` (configured in AnythingLLM instance)
+*   **Vector Database:** `lancedb` (configured in AnythingLLM instance)
+
+**Implementation:** These settings are enforced in `setArchitectPrompt()` method in `anythingllm.ts`.
+
+#### B. System Prompt Mandate (The Architect Protocol)
+
+The system prompt, containing the **266-line Architect persona** and the **[OFFICIAL_RATE_CARD]**, must be set once at the workspace level and **runtime prompt injection must be removed**.
+
+The prompt enforces the **NON-NEGOTIABLE STRUCTURAL COMPLIANCE**:
+
+*   **STEP 1: ANALYZE & PLAN (INTERNAL THOUGHT PROCESS):** Mandatory internal calculation phase (wrapped in `<think>` tags).
+*   **STEP 2: ASSEMBLE & OUTPUT THE SOW:** Must follow the **CRITICAL ASSEMBLY ORDER** (Prose -> JSON -> Prose -> JSON -> Final Summary).
+
+**Location:** `frontend/lib/system-prompt.ts` exports `ARCHITECT_SYSTEM_PROMPT`.
+
+### 3. Data Ingestion and RAG Pipeline
+
+Documents uploaded for analysis (briefs, PDFs) must be correctly processed, chunked, and embedded to serve as RAG context.
+
+#### Document Upload Workflow (2-Step Process)
+
+1. **Step 1: Process Document**
+   - **Endpoint:** `POST /api/v1/document/raw-text` (for text/markdown content)
+   - **Alternative:** `POST /api/v1/document/upload` (for file uploads via `multipart/form-data`)
+   - **Payload (raw-text):** `{ textContent: string, metadata: { title, docAuthor, description, docSource } }`
+   - **Response:** `{ success: boolean, documents: [{ location: string }] }`
+   - **CRITICAL:** The `location` field is required for Step 2.
+
+2. **Step 2: Embed in Workspace**
+   - **Endpoint:** `POST /api/v1/workspace/{slug}/update-embeddings`
+   - **Payload:** `{ adds: [location] }` (array of document locations from Step 1)
+   - **Response:** `{ success: boolean }`
+   - **CRITICAL:** This step actually vectorizes and links the document to the workspace. Without this, the document won't be available for RAG.
+
+#### RAG Process Details
+
+*   **Chunking:** AnythingLLM handles breaking the document content into chunks automatically.
+*   **Embedding:** Vector embeddings are created using the configured engine (`ollama`).
+*   **Storage:** The vector database (`lancedb`) stores these embeddings.
+*   **Embedding Status:** A successful upload response should confirm the document location and processing details (e.g., `wordCount`, `token_count_estimate`).
+
+#### Perfect Mirror Architecture
+
+**CRITICAL ARCHITECTURAL PRINCIPLE:** The application maintains a **1:1 mirror** with AnythingLLM:
+
+*   **Each Client Workspace** in the app = **Unique AnythingLLM Workspace**
+*   **Each SOW** in the app = **Unique Thread** within its client's workspace
+*   **Data Isolation:** Each client's workspace is completely isolated - no shared workspaces
+*   **SOW Embedding:** Each SOW is embedded in its own client workspace for RAG context
+*   **No Master Workspace:** The old "master workspace" pattern has been removed. Each client has its own isolated workspace.
+
+#### Troubleshooting
+
+*   **400 Bad Request on Embedding:** Ensure the payload for `/api/v1/workspace/{slug}/update-embeddings` uses `{ adds: [location] }` format, where `location` is a string from the document upload response.
+*   **Empty Content Guard:** The code includes guard clauses to prevent embedding empty SOWs (content < 20 characters). This is intentional to avoid errors.
+
+### 4. Communication Protocol and Stream Handling
+
+To ensure the system's brittleness is eliminated, the **Perfect Mirror** principles regarding communication must be enforced.
+
+| Mandate | Actionable Instruction | API/Code Reference |
+| :--- | :--- | :--- |
+| **CLEAN MESSAGE PASSING** | The client (`useChatManager.ts`) must *only* send the plain text user message. **Do not construct a `messages` array.** | Canonical payload: `{ message: "plain text string", mode: "chat" }`. See `streamChatWithThread()` in `anythingllm.ts:1494`. |
+| **Centralized Chat Endpoint** | All chat/SOW generation requests must use the **thread-specific streaming API** to maintain conversation history. | `POST /api/v1/workspace/{slug}/thread/{threadSlug}/stream-chat`. See `anythingllm.ts:1490`. |
+| **Output Parsing** | The client must parse the streaming response to detect structural elements (`[PROSE_FOR_SCOPE_1]`, `[JSON_FOR_SCOPE_1]`, `[INVESTMENT_OVERVIEW]`) for auto-insertion into the editor and pricing tables. | Parsing logic in `useChatManager.ts` and `page-utils.ts`. |
+| **Thread History Loading** | Use `GET /api/v1/workspace/{slug}/thread/{threadSlug}/chats` to load conversation history. Includes retry logic for newly created threads (exponential backoff). | See `getThreadChats()` in `anythingllm.ts:1276`. |
+
+#### Streaming Response Handling
+
+*   **Format:** Server-Sent Events (SSE) with newline-delimited chunks
+*   **Implementation:** Uses `ReadableStream` with `TextDecoder` to parse chunks
+*   **Buffer Management:** Accumulates chunks in a buffer, splits on newlines, processes complete lines
+*   **Error Handling:** Gracefully handles network errors and incomplete streams
+
+### 5. Thread Management and Auto-Naming
+
+**CRITICAL:** Threads are auto-named based on the first message content. Do not pre-name threads with specific SOW titles.
+
+*   **Creation:** Threads are created with a generic name (e.g., `Thread ${timestamp}`)
+*   **Auto-Rename:** AnythingLLM automatically updates the thread name after the first message
+*   **Persistence:** The `threadSlug` (not the name) is the persistent identifier stored in the database
+
+### 6. Agents and Extensibility
+
+AnythingLLM's agent and flow features are available for future enhancement of the SOW Generator workflows.
+
+*   **AI Agents:** Agents are LLMs augmented with simple tools and are invoked using the `@agent` directive within a workspace. Agents automatically operate within the context of the workspace they are invoked in.
+*   **Agent Flows (No-Code):** Complex, multi-step agent skills can be built using the visual flow editor blocks, such as **Web Scraper**, **API Call**, and **LLM Instruction**. These execute blocks sequentially.
+*   **Custom Agent Skills (Code-Based):** For custom logic, developers can create skills in JavaScript/NodeJS. These files must be packaged in a folder matching the `hubId` defined in `plugin.json` and placed in the AnythingLLM storage directory under `plugins/agent-skills/`. The core logic lives in `handler.js`, and all functions must return a `string` value. The `this.introspect()` function can be used to log thoughts back to the user interface.
+
+### 7. Error Handling and Retry Logic
+
+#### Thread Indexing Delays
+
+**CRITICAL:** Newly created threads may not be immediately available for chat history retrieval. The code includes retry logic with exponential backoff:
+
+*   **Retry Attempts:** 5 attempts with exponential backoff (2s, 3s, 4s, 5s delays)
+*   **400 Error Handling:** If thread doesn't exist (400), attempts to create it on-demand
+*   **Implementation:** See `getThreadChats()` in `anythingllm.ts:1276`
+
+#### Network Timeouts
+
+*   **Default Timeout:** 30 seconds for most requests
+*   **Workspace Listing:** 10 second timeout (faster for UI responsiveness)
+*   **Thread Creation:** 10 second timeout
+*   **Implementation:** Uses `AbortController` with `fetchWithTimeout()` wrapper
+
+### 8. Code References
+
+**Key Files:**
+- `frontend/lib/anythingllm.ts` - Complete AnythingLLM API wrapper
+- `frontend/hooks/useChatManager.ts` - Chat message handling and streaming
+- `frontend/lib/system-prompt.ts` - Architect system prompt (266 lines)
+- `frontend/app/page.tsx` - Workspace creation and SOW management
+- `frontend/lib/document-pinning.ts` - Document upload/pin workflow (if exists)
+
+**Key Methods:**
+- `createWorkspaceWithPrompt()` - Creates unique workspace per client and sets Architect prompt
+- `createThread()` - Creates new thread (SOW) in client's workspace
+- `streamChatWithThread()` - Streams chat responses within thread context
+- `embedRateCardDocument()` - Embeds rate card into client's workspace
+- `embedSOWDocument()` - Embeds SOW in its own client workspace for RAG
+- `getThreadChats()` - Retrieves conversation history with retry logic
+
+**Architecture Notes:**
+- **NO master workspace pattern** - Each client has isolated workspace
+- **1:1 mapping** - App workspace = AnythingLLM workspace, App SOW = AnythingLLM thread
+- **Data isolation** - Client workspaces never share data or context
+

@@ -313,14 +313,17 @@ export class AnythingLLMService {
     /**
      * Set the Architect system prompt on a workspace
      * Uses the /v1/workspace/{slug}/update endpoint with openAiPrompt
+     * NOTE: Rate card is injected dynamically in chat messages, NOT in system prompt
      */
     async setArchitectPrompt(workspaceSlug: string): Promise<boolean> {
-        const architectPrompt = ARCHITECT_SYSTEM_PROMPT;
-
         try {
             console.log(
-                `⚙️ Setting Architect system prompt and mirroring config for workspace: ${workspaceSlug}`,
+                `⚙️ Setting Architect system prompt for workspace: ${workspaceSlug}`,
             );
+            
+            // Use base prompt - rate card will be injected dynamically in chat messages
+            const architectPrompt = ARCHITECT_SYSTEM_PROMPT;
+
             // Fetch mandatory configuration from 'sow-generator' (or enforce defaults if missing)
             // Mandated: LLM Model (glm-4.6), LLM Provider (generic-openai), Temperature (0.7), History (20)
             const response = await fetch(

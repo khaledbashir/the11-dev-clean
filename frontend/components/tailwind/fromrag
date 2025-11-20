@@ -1,0 +1,69 @@
+This documentation provides the essential technical architecture and implementation mandates for integrating the Social Garden SOW Generator platform with AnythingLLM, focusing specifically on compliance with the **Perfect Mirror** philosophy and the **Guaranteed System Reliability** pillar.
+
+This guide translates the high-level requirements from the "Comprehensive Project Overview" into actionable technical specifications for the AI Coder.
+
+---
+
+## ANYTHINGLLM INTEGRATION DOCUMENTATION: SOW GENERATOR
+
+The architecture mandate for the SOW Generator is **Client = Workspace, SOW = Thread**. This governs all initialization and chat sequences.
+
+### 1. Core Architectural Mapping & Persistence
+
+The application must maintain a "Perfect Mirror" state of the client data within AnythingLLM's infrastructure.
+
+| Application Component | AnythingLLM Entity | Purpose/API |
+| :--- | :--- | :--- |
+| **Client** | **Workspace (slug)** | Container for data isolation and permanent configuration (System Prompt, Rate Card). |
+| **SOW Draft** | **Thread (threadSlug)** | Stores specific conversation history (rolling history) for iterative refinement. |
+| **Document Brief** | **Embedded Document** | Provides RAG context for analysis. Uploaded via `multipart/form-data`. |
+
+#### Required Setup Sequence (`anythingllm.ts` / `page.tsx`)
+1.  **Create Workspace:** Call `POST /v1/workspace/new` to create the client container (e.g., `nidaaa`).
+2.  **Configure Brain:** Immediately update the workspace using `POST /v1/workspace/{slug}/update` to set the **Architect System Prompt** (`openAiPrompt`), `openAiTemp` (e.g., 0.7 for consistency), and `openAiHistory` (e.g., 20).
+3.  **Create Thread:** Call `POST /v1/workspace/{slug}/thread/new` to initiate a unique conversation history for the new SOW. The returned `threadSlug` must be persisted in the local application database.
+
+### 2. LLM Configuration and Context Injection
+
+The system utilizes a specialized configuration to enforce **Unquestionable Financial Adherence** and **Deterministic Output**.
+
+#### A. Centralized LLM and Embedding Configuration
+The LLM and Embedding models are centrally defined and must be respected by all workspaces, achieved through the **Workspace Settings Mirroring** mandate:
+*   **LLM Provider:** `generic-openai`
+*   **LLM Model:** `glm-4.6`
+*   **Embedding Engine:** `ollama`
+*   **Vector Database:** `lancedb`
+
+#### B. System Prompt Mandate (The Architect Protocol)
+The system prompt, containing the **266-line Architect persona** and the **[OFFICIAL\_RATE\_CARD]**, must be set once at the workspace level and **runtime prompt injection must be removed**.
+
+The prompt enforces the **NON-NEGOTIABLE STRUCTURAL COMPLIANCE**:
+*   **STEP 1: ANALYZE & PLAN (INTERNAL THOUGHT PROCESS):** Mandatory internal calculation phase.
+*   **STEP 2: ASSEMBLE & OUTPUT THE SOW:** Must follow the **CRITICAL ASSEMBLY ORDER** (Prose -> JSON -> Prose -> JSON -> Final Summary).
+
+### 3. Data Ingestion and RAG Pipeline
+
+Documents uploaded for analysis (briefs, PDFs) must be correctly processed, chunked, and embedded to serve as RAG context.
+
+*   **Endpoint:** Documents are uploaded via `POST /v1/document/upload` (for files) or `POST /v1/document/raw-text` (for raw SOW content conversion).
+*   **RAG Process:** AnythingLLM handles breaking the document content into chunks and converting them into vector embeddings using the configured engine (`ollama`). The vector database (`lancedb`) stores these embeddings.
+*   **Embedding Status:** A successful upload response should confirm the document location and processing details (e.g., `wordCount`, `token_count_estimate`).
+*   **Troubleshooting:** The current known critical failure point is embedding submission, resulting in a `400 Bad Request`. The coder must ensure the payload used for linking embeddings (`/v1/workspace/{slug}/update-embeddings`) is correctly formatted to resolve this architectural weakness.
+
+### 4. Communication Protocol and Stream Handling
+
+To ensure the system's brittleness is eliminated, the **Perfect Mirror** principles regarding communication must be enforced.
+
+| Mandate | Actionable Instruction | API/Code Reference |
+| :--- | :--- | :--- |
+| **CLEAN MESSAGE PASSING** | The client (`page.tsx`) must *only* send the plain text user message. **Do not construct a `messages` array.** | Canonical payload includes: `message: "plain text string"`, `mode: "chat"`. |
+| **Centralized Chat Endpoint** | All chat/SOW generation requests must use the **thread-specific streaming API** to maintain conversation history. | `POST /v1/workspace/{slug}/thread/{threadSlug}/stream-chat`. |
+| **Output Parsing** | The client must parse the streaming response to detect structural elements (`[PROSE_FOR_SCOPE_1]`, `[JSON_FOR_SCOPE_1]`, `[INVESTMENT_OVERVIEW]`) for auto-insertion into the editor and pricing tables. | Parsing logic in `page.tsx` or `useChatManager.ts`. |
+
+### 5. Agents and Extensibility
+
+AnythingLLM's agent and flow features are available for future enhancement of the SOW Generator workflows.
+
+*   **AI Agents:** Agents are LLMs augmented with simple tools and are invoked using the `@agent` directive within a workspace. Agents automatically operate within the context of the workspace they are invoked in.
+*   **Agent Flows (No-Code):** Complex, multi-step agent skills can be built using the visual flow editor blocks, such as **Web Scraper**, **API Call**, and **LLM Instruction**. These execute blocks sequentially.
+*   **Custom Agent Skills (Code-Based):** For custom logic, developers can create skills in JavaScript/NodeJS. These files must be packaged in a folder matching the `hubId` defined in `plugin.json` and placed in the AnythingLLM storage directory under `plugins/agent-skills/`. The core logic lives in `handler.js`, and all functions must return a `string` value. The `this.introspect()` function can be used to log thoughts back to the user interface.

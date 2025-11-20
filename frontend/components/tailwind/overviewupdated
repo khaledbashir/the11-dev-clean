@@ -1,0 +1,295 @@
+# Comprehensive Project Overview: Social Garden SOW Generator
+
+## Project Purpose and Core Functionality
+
+The Social Garden SOW Generator is a **production-grade Statement of Work (SOW) generation platform** that serves as a comprehensive workbench for creating, managing, and exporting professional SOW documents. The system combines AI-powered content generation with sophisticated pricing calculations, document management, and multi-format export capabilities.
+
+### Core Purpose
+- **SOW Generation**: Create professional Statements of Work with accurate pricing based on an official rate card
+- **Client Management**: Organize clients into dedicated workspaces for data isolation
+- **Collaborative Editing**: Real-time document editing with AI assistance
+- **Multi-format Export**: Generate PDF, Excel, and Google Sheets exports
+- **Pricing Accuracy**: Ensure 100% compliance with official Social Garden rate card
+
+## Technical Architecture
+
+### 3-Service Architecture
+The system runs on **Easypanel** with three separate services:
+
+1. **Frontend Service** (`sow-qandu-me`)
+   - **Repository**: `khaledbashir/the11-dev-clean`
+   - **Branch**: `sow-latest`
+   - **URL**: `https://sow.qandu.me`
+   - **Technology**: Next.js with TypeScript, Tailwind CSS
+
+2. **Backend Service** (`socialgarden-backend`)
+   - **Repository**: `khaledbashir/the11-dev-clean`
+   - **Branch**: `backend-service`
+   - **URL**: `https://ahmad-socialgarden-backend.840tjq.easypanel.host`
+   - **Technology**: FastAPI (Python)
+
+3. **MySQL Database** (`mysql-database`)
+   - **Internal Host**: `ahmad_mysql-database`
+   - **Database**: `socialgarden_sow`
+
+### Core Architecture Principle
+**Client = Workspace, SOW = Thread**
+- Each client has a dedicated workspace (data isolation)
+- Each SOW is a dedicated thread within that client's workspace
+- Workspace contains: System prompt + Client documents + Rate card
+- Thread contains: Conversation history for that specific SOW
+
+### Key Components
+
+#### Frontend Architecture
+- **Main Application**: [`frontend/app/page.tsx`](frontend/app/page.tsx:1) - Central orchestrator
+- **UI Components**: Tailwind-based components in [`frontend/components/tailwind/`](frontend/components/tailwind/)
+- **State Management**: Custom hooks for document and chat management
+- **Editor**: Novel editor with custom pricing table extensions
+
+#### Backend Services
+- **PDF Generation**: [`backend/main.py`](backend/main.py:380) - Professional PDF with Social Garden branding
+- **Google Sheets Integration**: [`backend/services/google_sheets_generator.py`](backend/services/google_sheets_generator.py:69) - Automated sheet creation
+- **Excel Export**: Server-side Excel generation with proper formatting
+
+#### AnythingLLM Integration
+- **Workspace Management**: [`frontend/lib/anythingllm.ts`](frontend/lib/anythingllm.ts:1) - Complete API wrapper
+- **Document Upload**: [`frontend/lib/document-pinning.ts`](frontend/lib/document-pinning.ts:1) - 2-step upload/pin workflow
+- **System Prompts**: [`frontend/lib/system-prompt.ts`](frontend/lib/system-prompt.ts:1) - Detailed Architect persona
+
+## User Journey and Experience
+
+### Onboarding Flow
+1. **Welcome Screen**: [`frontend/components/tailwind/home-welcome.tsx`](frontend/components/tailwind/home-welcome.tsx:1) guides new users
+2. **Workspace Creation**: [`frontend/components/tailwind/create-workspace-dialog.tsx`](frontend/components/tailwind/create-workspace-dialog.tsx:1) for client setup
+3. **Guided Tour**: Optional walkthrough for first-time users
+
+### Main Workflow
+1. **Client Selection**: Choose workspace from sidebar navigation
+2. **SOW Creation**: Create new SOW within client workspace
+3. **AI Collaboration**: Chat with "The Architect" AI for content generation
+4. **Document Upload**: Upload briefs/PDFs for AI analysis
+5. **Real-time Editing**: Live document editing with auto-save
+6. **Pricing Management**: Interactive pricing tables with role-based calculations
+7. **Export**: Multiple format options (PDF, Excel, Google Sheets)
+
+### Key Interactions
+- **Drag-and-drop**: Document upload and table reordering
+- **Auto-insertion**: AI-generated content automatically populates editor
+- **Thread Management**: Conversation history persistence per SOW
+- **Real-time Collaboration**: Multi-user editing with conflict resolution
+- **Bulk Operations**: Multi-select for workspace management
+
+## Workspace Structure and Features
+
+### Workspace Model
+```typescript
+interface Workspace {
+  id: string;
+  name: string;
+  sows: SOW[];
+  workspace_slug?: string; // AnythingLLM workspace slug
+  slug?: string;
+  workspaceId?: string; // AnythingLLM workspace ID
+  embedId?: string | number;
+  syncedAt?: string;
+}
+```
+
+### Workspace Features
+- **Data Isolation**: Each client workspace is completely isolated
+- **Document Organization**: SOWs grouped by client
+- **AI Context**: Workspace-specific system prompts and rate cards
+- **Thread Management**: Individual conversation threads per SOW
+- **Drag-and-drop**: Workspace and SOW reordering
+- **Bulk Operations**: Multi-select for workspace management
+
+### Document Management
+- **Auto-save**: Real-time document persistence
+- **Version History**: Track changes with timestamps
+- **Status Tracking**: Draft → Sent → Viewed → Accepted/Declined
+- **Metadata**: Client info, vertical, service line, budget notes
+
+## System Prompts and Configuration
+
+### The Architect System Prompt
+The system uses a sophisticated **266-line system prompt** ([`frontend/lib/system-prompt.ts`](frontend/lib/system-prompt.ts:1)) that enforces:
+
+#### Phase Control Protocol
+1. **ANALYSIS_MODE**: Upon file upload - analyze without generating SOW
+2. **DRAFTING_MODE**: After user confirmation - generate full SOW
+
+#### Core Knowledge Base
+- **OFFICIAL_RATE_CARD**: 96 roles with exact hourly rates (AUD)
+- **FINANCIAL_RULES**: Mandatory calculation order (hours × rate → discount → GST)
+- **JSON_STRUCTURE**: Required format for all pricing blocks
+- **ROLE_MAPPING**: Specific deliverable-to-role mapping rules
+
+#### Critical Failure Conditions
+- Using any role/rate not in OFFICIAL_RATE_CARD = automatic failure
+- Incorrect mathematical calculations = automatic failure
+- Missing mandatory governance roles = automatic failure
+
+### Rate Card System
+Authoritative rate card with **96 official roles** ([`frontend/lib/rateCard.ts`](frontend/lib/rateCard.ts:1)):
+
+#### Role Categories
+- **Account Management**: Senior Account Director ($365/hr) to Account Coordinator ($120/hr)
+- **Project Management**: Head Of Senior Project Management ($365/hr) to Project Coordination ($110/hr)
+- **Tech Delivery**: Sr. Architect roles ($365/hr) to Producer roles ($120/hr)
+- **Content**: Strategy roles ($210/hr) to Copywriting ($120-$180/hr)
+- **Design**: Digital Asset roles ($140-$190/hr)
+
+#### Pricing Rules
+- **Mandatory Roles**: Project Management + Account Management always included
+- **Role Diversity**: 5-10+ roles per project based on scope
+- **Budget Calibration**: Hours scaled to match budget constraints
+- **GST Calculation**: 10% on subtotal after discount
+
+## Data Models and Business Logic
+
+### Core Data Structures
+```typescript
+// Document with full SOW context
+interface Document {
+  id: string;
+  title: string;
+  content: any; // TipTap JSON structure
+  folderId: string | null;
+  workspaceSlug?: string;
+  threadSlug?: string;
+  pricingData?: MultiScopeData | null;
+  vertical?: VerticalType | null;
+  service_line?: ServiceLineType | null;
+  clientName?: string;
+  budget?: number;
+  discount?: number;
+}
+
+// Pricing data structure
+interface MultiScopeData {
+  scopes: Scope[];
+  discount: number;
+  extractedAt?: number;
+}
+
+// Role allocation with pricing
+interface RoleAllocation {
+  role: string;
+  description: string;
+  hours: number;
+  rate: number;
+  cost: number;
+  discount?: number;
+}
+```
+
+### Business Logic Validation
+- **Rate Card Compliance**: All roles must match official rate card exactly
+- **Financial Calculations**: Strict order with validation at each step
+- **Budget Constraints**: AI scales hours to fit client budgets
+- **Role Mapping**: Deliverables mapped to specific execution roles
+- **Discount Rules**: Max 50% discount, cannot exceed subtotal
+
+## State Management
+
+### Document State Hook
+[`frontend/hooks/useDocumentState.ts`](frontend/hooks/useDocumentState.ts:1) manages:
+- Document loading and persistence
+- Workspace/SOW synchronization
+- Auto-save functionality (1.5 second intervals)
+- URL parameter handling for direct SOW access
+
+### Chat Manager Hook
+[`frontend/hooks/useChatManager.ts`](frontend/hooks/useChatManager.ts:1) handles:
+- AI conversation management with AnythingLLM threads
+- File upload and brief analysis workflow
+- Content insertion and validation
+- Multi-scope pricing data management
+- Handshake confirmation flow for file analysis
+
+### Editor Integration
+- **TipTap JSON**: Novel editor with custom pricing table nodes
+- **Real-time Updates**: Content automatically inserts from AI responses
+- **Pricing Tables**: Interactive tables with role-based calculations
+- **Auto-formatting**: Markdown to structured JSON conversion
+
+## Backend API Structure
+
+### PDF Generation Service
+[`backend/main.py`](backend/main.py:380) provides:
+- **Professional PDF**: Branded SOW documents with Plus Jakarta Sans font
+- **Multi-scope Support**: Complex projects with multiple pricing scopes
+- **Smart Pricing Summary**: Configurable visibility of pricing calculations
+- **Logo Integration**: Base64-encoded Social Garden branding
+
+### Google Sheets Integration
+[`backend/services/google_sheets_generator.py`](backend/services/google_sheets_generator.py:69) offers:
+- **OAuth Authentication**: Secure Google API integration
+- **Template-based Generation**: Professional formatting with Social Garden colors
+- **Auto-sharing**: Optional automatic sharing to specified emails
+- **Folder Organization**: Sheets placed in designated folders
+
+### Excel Export Service
+- **Multi-worksheet**: Overview, Pricing, Deliverables, Assumptions
+- **Professional Formatting**: Social Garden branding and colors
+- **Calculation Support**: Automatic totals, GST, and discount handling
+
+## Database Schema
+
+### Core Tables
+[`database/schema.sql`](database/schema.sql:1) defines:
+
+#### Primary Tables
+- **folders**: Workspace management with AnythingLLM integration
+- **sows**: Main document storage with full metadata
+- **sow_activities**: Comprehensive activity tracking
+- **sow_comments**: Threaded comment system
+- **sow_acceptances**: Digital signature tracking
+- **sow_rejections**: Rejection reasons and follow-up tracking
+
+#### Supporting Tables
+- **ai_conversations**: AI chat history with sentiment analysis
+- **rate_card_roles**: Official 96-role rate card (single source of truth)
+- **user_preferences**: Persistent user settings and AI model preferences
+- **chat_messages**: Centralized chat message storage
+
+### Key Relationships
+- **Foreign Keys**: Proper cascade deletes for data integrity
+- **Indexing**: Optimized for common query patterns
+- **Views**: Pre-computed dashboard views for performance
+- **Migration System**: Version-controlled schema evolution
+
+## Critical Technical Features
+
+### AI Integration
+- **AnythingLLM Workspace Management**: Automated workspace creation and configuration
+- **Document Embedding**: Context-aware AI responses based on uploaded briefs
+- **Thread Persistence**: Conversation history maintained per SOW
+- **Multi-model Support**: Configurable AI providers (OpenRouter, Groq, etc.)
+
+### Pricing Engine
+- **Role-based Calculations**: Exact rate card compliance
+- **Multi-scope Support**: Complex projects with phased deliverables
+- **Discount Logic**: Percentage and fixed discount with validation
+- **GST Integration**: Automatic 10% GST calculation
+- **Budget Validation**: Real-time budget constraint checking
+
+### Export System
+- **PDF Generation**: Professional branding with smart summary visibility
+- **Excel Integration**: Multi-worksheet with automatic calculations
+- **Google Sheets**: OAuth-based with professional templates
+- **API Access**: Programmatic access for integrations
+
+## Current State Assessment
+
+The project represents a **mature, production-ready SOW generation platform** with:
+- ✅ **Complete Architecture**: 3-service deployment with auto-scaling
+- ✅ **AI Integration**: Full AnythingLLM workspace and thread management
+- ✅ **Professional Features**: PDF generation, Excel export, Google Sheets integration
+- ✅ **Data Integrity**: Comprehensive database schema with proper relationships
+- ✅ **User Experience**: Intuitive workflows with drag-and-drop and real-time collaboration
+- ✅ **Business Logic**: Sophisticated pricing engine with role-based calculations
+- ✅ **Quality Assurance**: Extensive validation and error handling throughout
+
+The system successfully combines modern web technologies with AI capabilities to deliver a comprehensive SOW generation solution that meets enterprise requirements for accuracy, professionalism, and user experience.
