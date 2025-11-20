@@ -52,10 +52,17 @@ export function convertMarkdownToNovelJSON(
       content.push(...narrativeContent);
     }
 
-    // Convert JSON to pricing table
-    const pricingTable = convertJSONToPricingTable(jsonMatch.json);
-    if (pricingTable) {
-      content.push(pricingTable);
+    // Convert JSON to full content structure (may return array of nodes)
+    const pricingTableOrContent = convertJSONToPricingTable(jsonMatch.json);
+    if (pricingTableOrContent) {
+      // 🎯 FIX: Handle both single node and array of nodes
+      if (Array.isArray(pricingTableOrContent)) {
+        // Spread array of nodes into content
+        content.push(...pricingTableOrContent);
+      } else {
+        // Single node (legacy format)
+        content.push(pricingTableOrContent);
+      }
     }
 
     lastIndex = jsonMatch.index + jsonMatch.match.length;
@@ -254,9 +261,93 @@ function parseInlineFormatting(text: string): any[] {
   return parts.length > 0 ? parts : [{ type: "text", text }];
 }
 
-// Helper: Convert JSON pricing data to editablePricingTable node
+// 🎯 FIX: Build full content structure (Text + Table + Bullets) instead of just table
+// Helper: Convert JSON pricing data to full content array (heading + description + table + lists)
 function convertJSONToPricingTable(jsonData: any): any | null {
   if (!jsonData || typeof jsonData !== "object") return null;
+
+  // 🎯 NEW: Handle single scope with full structure (scope_name, scope_description, deliverables, assumptions)
+  if (jsonData.scope_name || jsonData.scope_description) {
+    const contentArray: any[] = [];
+    
+    // 1. Scope Title (Heading)
+    if (jsonData.scope_name) {
+      contentArray.push({
+        type: "heading",
+        attrs: { level: 2 },
+        content: [{ type: "text", text: jsonData.scope_name }]
+      });
+    }
+    
+    // 2. Scope Description (Narrative Paragraph)
+    if (jsonData.scope_description) {
+      // Parse markdown formatting in description (bold, etc.)
+      const descriptionContent = parseInlineFormatting(jsonData.scope_description);
+      contentArray.push({
+        type: "paragraph",
+        content: descriptionContent
+      });
+    }
+    
+    // 3. Pricing Table (from roles or role_allocation)
+    const roles = jsonData.roles || jsonData.role_allocation || [];
+    if (Array.isArray(roles) && roles.length > 0) {
+      const rows = roles.map((role: any) => ({
+        role: role.role || role.name || "",
+        hours: role.hours || null,
+        rate: role.rate || null,
+        total: role.total || null,
+      }));
+      contentArray.push({
+        type: "editablePricingTable",
+        attrs: {
+          rows,
+          discount: jsonData.discount || 0,
+        },
+      });
+    }
+    
+    // 4. Deliverables Heading + Bullet List
+    if (jsonData.deliverables && Array.isArray(jsonData.deliverables) && jsonData.deliverables.length > 0) {
+      contentArray.push({
+        type: "heading",
+        attrs: { level: 3 },
+        content: [{ type: "text", text: "Deliverables" }]
+      });
+      contentArray.push({
+        type: "bulletList",
+        content: jsonData.deliverables.map((item: string) => ({
+          type: "listItem",
+          content: [{
+            type: "paragraph",
+            content: parseInlineFormatting(item)
+          }]
+        }))
+      });
+    }
+    
+    // 5. Assumptions Heading + Bullet List
+    if (jsonData.assumptions && Array.isArray(jsonData.assumptions) && jsonData.assumptions.length > 0) {
+      contentArray.push({
+        type: "heading",
+        attrs: { level: 3 },
+        content: [{ type: "text", text: "Assumptions" }]
+      });
+      contentArray.push({
+        type: "bulletList",
+        content: jsonData.assumptions.map((item: string) => ({
+          type: "listItem",
+          content: [{
+            type: "paragraph",
+            content: parseInlineFormatting(item)
+          }]
+        }))
+      });
+    }
+    
+    // Return array of nodes (will be spread into content array)
+    return contentArray.length > 0 ? contentArray : null;
+  }
 
   // Handle root-level array of roles (e.g. [{"role": "...", ...}, ...])
   if (Array.isArray(jsonData)) {
@@ -275,41 +366,91 @@ function convertJSONToPricingTable(jsonData: any): any | null {
     };
   }
 
-  // Handle V4.1 JSON format with scopes
+  // Handle V4.1 JSON format with scopes (multi-scope)
   if (jsonData.scopes && Array.isArray(jsonData.scopes)) {
-    // Multi-scope: combine all scopes into one table
-    const allRows: any[] = [];
+    // For multi-scope, build full structure for each scope
+    const allContent: any[] = [];
+    
     jsonData.scopes.forEach((scope: any, scopeIdx: number) => {
-      if (scopeIdx > 0) {
-        // Add separator row between scopes
-        allRows.push({
-          role: "---",
-          hours: null,
-          rate: null,
-          total: null,
+      // Scope Title
+      if (scope.scope_name) {
+        allContent.push({
+          type: "heading",
+          attrs: { level: 2 },
+          content: [{ type: "text", text: scope.scope_name }]
         });
       }
-      if (scope.roles && Array.isArray(scope.roles)) {
-        scope.roles.forEach((role: any) => {
-          allRows.push({
-            role: role.role || role.name || "",
-            hours: role.hours || null,
-            rate: role.rate || null,
-            total: role.total || null,
-          });
+      
+      // Scope Description
+      if (scope.scope_description) {
+        const descriptionContent = parseInlineFormatting(scope.scope_description);
+        allContent.push({
+          type: "paragraph",
+          content: descriptionContent
+        });
+      }
+      
+      // Pricing Table for this scope
+      const scopeRoles = scope.roles || scope.role_allocation || [];
+      if (Array.isArray(scopeRoles) && scopeRoles.length > 0) {
+        const rows = scopeRoles.map((role: any) => ({
+          role: role.role || role.name || "",
+          hours: role.hours || null,
+          rate: role.rate || null,
+          total: role.total || null,
+        }));
+        allContent.push({
+          type: "editablePricingTable",
+          attrs: {
+            rows,
+            discount: scope.discount || jsonData.discount || 0,
+          },
+        });
+      }
+      
+      // Deliverables
+      if (scope.deliverables && Array.isArray(scope.deliverables) && scope.deliverables.length > 0) {
+        allContent.push({
+          type: "heading",
+          attrs: { level: 3 },
+          content: [{ type: "text", text: "Deliverables" }]
+        });
+        allContent.push({
+          type: "bulletList",
+          content: scope.deliverables.map((item: string) => ({
+            type: "listItem",
+            content: [{
+              type: "paragraph",
+              content: parseInlineFormatting(item)
+            }]
+          }))
+        });
+      }
+      
+      // Assumptions
+      if (scope.assumptions && Array.isArray(scope.assumptions) && scope.assumptions.length > 0) {
+        allContent.push({
+          type: "heading",
+          attrs: { level: 3 },
+          content: [{ type: "text", text: "Assumptions" }]
+        });
+        allContent.push({
+          type: "bulletList",
+          content: scope.assumptions.map((item: string) => ({
+            type: "listItem",
+            content: [{
+              type: "paragraph",
+              content: parseInlineFormatting(item)
+            }]
+          }))
         });
       }
     });
-    return {
-      type: "editablePricingTable",
-      attrs: {
-        rows: allRows,
-        discount: jsonData.discount || 0,
-      },
-    };
+    
+    return allContent.length > 0 ? allContent : null;
   }
 
-  // Handle simple roles array
+  // Handle simple roles array (legacy format - just table)
   if (jsonData.roles && Array.isArray(jsonData.roles)) {
     const rows = jsonData.roles.map((role: any) => ({
       role: role.role || role.name || "",

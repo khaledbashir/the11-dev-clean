@@ -454,6 +454,7 @@ export function useChatManager({
 
         setLastUserPrompt(message);
 
+        // 🎯 FIX: Optimistic UI - Add user message immediately before server response
         const userMessage: ChatMessage = {
             id: `msg${Date.now()}`,
             role: "user",
@@ -461,6 +462,7 @@ export function useChatManager({
             timestamp: Date.now(),
         };
 
+        // Immediately add user message to chat (optimistic UI)
         const newMessages = [...chatMessages, userMessage];
         setChatMessages(newMessages);
 
@@ -501,6 +503,11 @@ export function useChatManager({
 
             // Variable to accumulate full response for final processing
             let fullResponseContent = "";
+            
+            // 🎯 FIX: Debounce stream rendering to prevent flickering
+            let debounceTimeout: NodeJS.Timeout | null = null;
+            let lastUpdateTime = 0;
+            const DEBOUNCE_INTERVAL = 50; // Update UI every 50ms instead of every token
 
             await anythingLLM.streamChatWithThread(
                 workspace,
@@ -508,15 +515,54 @@ export function useChatManager({
                 message,
                 (chunk) => {
                     fullResponseContent += chunk;
-                    setChatMessages((prev) => 
-                        prev.map((msg) => 
-                            msg.id === assistantMsgId 
-                                ? { ...msg, content: fullResponseContent } 
-                                : msg
-                        )
-                    );
+                    
+                    // Debounce UI updates to prevent flickering
+                    const now = Date.now();
+                    if (now - lastUpdateTime >= DEBOUNCE_INTERVAL) {
+                        // Clear any pending timeout
+                        if (debounceTimeout) {
+                            clearTimeout(debounceTimeout);
+                        }
+                        
+                        // Update immediately if enough time has passed
+                        setChatMessages((prev) => 
+                            prev.map((msg) => 
+                                msg.id === assistantMsgId 
+                                    ? { ...msg, content: fullResponseContent } 
+                                    : msg
+                            )
+                        );
+                        lastUpdateTime = now;
+                    } else {
+                        // Schedule update if not enough time has passed
+                        if (debounceTimeout) {
+                            clearTimeout(debounceTimeout);
+                        }
+                        debounceTimeout = setTimeout(() => {
+                            setChatMessages((prev) => 
+                                prev.map((msg) => 
+                                    msg.id === assistantMsgId 
+                                        ? { ...msg, content: fullResponseContent } 
+                                        : msg
+                                )
+                            );
+                            lastUpdateTime = Date.now();
+                        }, DEBOUNCE_INTERVAL - (now - lastUpdateTime));
+                    }
                 },
                 "chat"
+            );
+            
+            // Final update to ensure we have the complete content
+            if (debounceTimeout) {
+                clearTimeout(debounceTimeout);
+            }
+            setChatMessages((prev) => 
+                prev.map((msg) => 
+                    msg.id === assistantMsgId 
+                        ? { ...msg, content: fullResponseContent } 
+                        : msg
+                )
             );
 
             setStreamingMessageId(null);

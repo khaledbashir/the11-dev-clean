@@ -1685,12 +1685,12 @@ export default function WorkspaceChat({
                                 )}
                             </Button>
 
-                            {/* Send button - full width, prominent */}
+                            {/* Send button - fixed width, professional */}
                             <Button
                                 onClick={handleSendMessage}
                                 disabled={!chatInput.trim() || isLoading}
                                 size="sm"
-                                className="flex-1 bg-[#15a366] hover:bg-[#10a35a] text-white h-12 font-semibold border-0 text-base"
+                                className="w-auto max-w-[200px] bg-[#15a366] hover:bg-[#10a35a] active:bg-[#0d8f4d] text-white h-12 px-6 font-semibold border-0 text-base transition-all duration-200 shadow-sm hover:shadow-md"
                                 title="Send message to The Architect"
                             >
                                 {isLoading ? (

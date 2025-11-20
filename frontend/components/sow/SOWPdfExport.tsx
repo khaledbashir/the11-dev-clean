@@ -27,8 +27,8 @@ Font.register({
 });
 
 const palette = {
-  primary: '#00A86B',
-  primaryDark: '#008456',
+  primary: '#00D084', // 🎯 FIX: Match Social Garden brand green from reference screenshots
+  primaryDark: '#00D084', // Green header bar
   primaryLight: '#E9F7F0',
   text: '#1E2A2F',
   textMuted: '#516066',
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     color: palette.primary,
   },
   banner: {
-    backgroundColor: palette.primary,
+    backgroundColor: '#00D084', // 🎯 FIX: Green background for title block matching reference
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 24,
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   scopeHeader: {
-    backgroundColor: palette.primaryDark,
+    backgroundColor: '#00D084', // 🎯 FIX: Green header bar matching reference screenshots
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: palette.primary,
+    backgroundColor: '#00D084', // 🎯 FIX: Green table header matching reference
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   summaryHeaderRow: {
     flexDirection: 'row',
-    backgroundColor: palette.primary,
+    backgroundColor: '#00D084', // 🎯 FIX: Green summary header matching reference
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
