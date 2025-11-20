@@ -42,6 +42,7 @@ import {
     exportToExcel,
     exportToPDF,
     cleanSOWContent,
+    tiptapToHTML,
 } from "@/lib/export-utils";
 import { prepareSOWForNewPDF } from "@/lib/sow-pdf-utils";
 import { useChatManager } from "@/hooks/useChatManager";
@@ -1865,7 +1866,22 @@ export default function Page() {
             }
 
             // Build clean HTML from TipTap JSON to ensure proper tables/lists
-            const editorHTML = convertNovelToHTML(contentForExport);
+            // First try to use editor's built-in getHTML() method (most reliable)
+            let editorHTML = "";
+            if (editorRef.current && typeof editorRef.current.getHTML === 'function') {
+                try {
+                    editorHTML = editorRef.current.getHTML();
+                    console.log("📝 [PDF Export] Using editor.getHTML()");
+                } catch (e) {
+                    console.warn("⚠️ [PDF Export] editor.getHTML() failed, falling back to tiptapToHTML:", e);
+                }
+            }
+            
+            // Fallback to tiptapToHTML if editor HTML is not available or empty
+            if (!editorHTML || editorHTML.trim() === "" || editorHTML === "<p></p>") {
+                editorHTML = tiptapToHTML(contentForExport);
+                console.log("📝 [PDF Export] Using tiptapToHTML() fallback");
+            }
 
             if (
                 !editorHTML ||

@@ -68,10 +68,14 @@ export default function PageModals({
                         <p className="text-gray-400 mb-6">
                             Your PDF is ready to download.
                         </p>
-                        <div className="flex gap-4">
-                            <SOWPdfExportWrapper sowData={newPDFData} />
+                        <div className="flex flex-col gap-4">
+                            <SOWPdfExportWrapper 
+                                sowData={newPDFData} 
+                                variant="editor"
+                                fileName={`${currentDoc?.title?.replace(/[^a-z0-9]/gi, "_") || "SOW"}-Professional.pdf`}
+                            />
                             <button
-                                className="bg-green-600 text-white px-4 py-2 rounded-md"
+                                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md transition-colors"
                                 onClick={() => setShowNewPDFModal(false)}
                             >
                                 Close
