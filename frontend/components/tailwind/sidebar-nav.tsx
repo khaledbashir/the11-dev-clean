@@ -220,8 +220,9 @@ export default function SidebarNav({
   // 🆕 Loading state for New Document button
   const [isCreatingDocument, setIsCreatingDocument] = useState(false);
 
-  // Helper function to truncate names to 5 characters + "..."
-  const truncateName = (name: string, maxLength: number = 5): string => {
+  // Helper function to truncate names only if extremely long (for very edge cases)
+  // Default: Show full name, only truncate if over 50 characters
+  const truncateName = (name: string, maxLength: number = 50): string => {
     if (name.length <= maxLength) return name;
     return name.substring(0, maxLength) + "...";
   };
@@ -424,7 +425,7 @@ export default function SidebarNav({
             )}
           </button>
 
-          {/* Folder Name - Truncated to 5 chars with tooltip */}
+          {/* Folder Name - Full name with tooltip */}
           <div className="flex-1 min-w-0 mr-2">
             {renamingId === folder.id ? (
               <Input
@@ -452,7 +453,7 @@ export default function SidebarNav({
                 }`}
                 title={folder.name}
               >
-                <span className="block" title={folder.name}>{truncateName(folder.name)}</span>
+                <span className="block truncate" title={folder.name}>{folder.name}</span>
                 <span className="ml-1 text-xs text-gray-500 flex-shrink-0">({folderDocuments.length})</span>
               </button>
             )}
@@ -606,7 +607,7 @@ export default function SidebarNav({
           {/* Doc Icon */}
           <FileText className="w-4 h-4 flex-shrink-0" />
 
-          {/* Document Name - Truncated to 5 chars with tooltip */}
+          {/* Document Name - Full name with tooltip */}
           <div className="flex-1 min-w-0 mr-2">
             {renamingId === document.id ? (
               <Input
@@ -628,10 +629,10 @@ export default function SidebarNav({
                     actualOnSelectDocument(document.id);
                   }
                 }}
-                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors block"
+                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors block truncate"
                 title={document.title}
               >
-                {truncateName(document.title)}
+                {document.title}
               </button>
             )}
           </div>

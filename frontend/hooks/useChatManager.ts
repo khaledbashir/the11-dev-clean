@@ -119,6 +119,8 @@ export function useChatManager({
     documents = [],
     editorRef = undefined,
     setLatestEditorJSON,
+    workspaces = [],
+    currentWorkspaceId,
 }: UseChatManagerProps) {
     const [agents, setAgents] = useState<Agent[]>([]);
     const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
@@ -266,7 +268,18 @@ export function useChatManager({
             
             setHandshakeState('analyzing');
             
-            const response = await anythingLLM.chatWithOpenAI(messages);
+            // Get workspace slug from currentDoc, current workspace, or fallback to default
+            let workspaceSlug = currentDoc?.workspaceSlug;
+            if (!workspaceSlug && currentWorkspaceId && workspaces.length > 0) {
+                const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId);
+                workspaceSlug = currentWorkspace?.workspaceSlug || currentWorkspace?.workspace_slug || currentWorkspace?.slug;
+            }
+            if (!workspaceSlug) {
+                workspaceSlug = "gen-the-architect"; // Fallback
+            }
+            console.log(`🔍 [Chat Manager] Using workspace slug: ${workspaceSlug} for chatWithOpenAI (from currentDoc: ${!!currentDoc?.workspaceSlug}, currentWorkspace: ${!!currentWorkspaceId})`);
+            
+            const response = await anythingLLM.chatWithOpenAI(messages, workspaceSlug);
             
             if (!response) {
                 console.error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
@@ -482,7 +495,18 @@ export function useChatManager({
              setChatMessages(prev => [...prev, userMsg]);
              
              try {
-                 const response = await anythingLLM.chatWithOpenAI(messages);
+                 // Get workspace slug from currentDoc, current workspace, or fallback to default
+                 let workspaceSlug = currentDoc?.workspaceSlug;
+                 if (!workspaceSlug && currentWorkspaceId && workspaces.length > 0) {
+                     const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId);
+                     workspaceSlug = currentWorkspace?.workspaceSlug || currentWorkspace?.workspace_slug || currentWorkspace?.slug;
+                 }
+                 if (!workspaceSlug) {
+                     workspaceSlug = "gen-the-architect"; // Fallback
+                 }
+                 console.log(`🔍 [Chat Manager] Using workspace slug: ${workspaceSlug} for chatWithOpenAI (generation) (from currentDoc: ${!!currentDoc?.workspaceSlug}, currentWorkspace: ${!!currentWorkspaceId})`);
+                 
+                 const response = await anythingLLM.chatWithOpenAI(messages, workspaceSlug);
                  
                  if (!response) {
                      console.error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
