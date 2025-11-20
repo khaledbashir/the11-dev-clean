@@ -1681,7 +1681,29 @@ You have access to the full SOW document that has been embedded in this workspac
                 buffer = lines.pop() || "";
 
                 for (const line of lines) {
-                    if (line.trim()) {
+                    if (!line.trim()) continue;
+                    
+                    // Parse SSE format: "data: {...}"
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const jsonStr = line.slice(6); // Remove "data: " prefix
+                            const data = JSON.parse(jsonStr);
+                            
+                            // Extract textResponse from the chunk
+                            if (data.textResponse) {
+                                onChunk(data.textResponse);
+                            }
+                            // Handle other event types if needed
+                            else if (data.type === 'statusUpdate' && data.message) {
+                                console.log(`📡 [Stream Status]: ${data.message}`);
+                            }
+                        } catch (e) {
+                            // If JSON parsing fails, pass the line as-is (backwards compatibility)
+                            console.warn('⚠️ Failed to parse SSE chunk:', line.substring(0, 100));
+                            onChunk(line);
+                        }
+                    } else {
+                        // Non-SSE format, pass as-is
                         onChunk(line);
                     }
                 }
