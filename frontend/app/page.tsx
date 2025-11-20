@@ -49,7 +49,6 @@ import { useChatManager } from "@/hooks/useChatManager";
 import { useAgentState } from "@/hooks/useAgentState";
 import { useDocumentState } from "@/hooks/useDocumentState";
 import { useUIState } from "@/hooks/useUIState";
-import { debug, error, warn } from "@/lib/logger";
 
 export default function Page() {
     const {
@@ -321,9 +320,9 @@ export default function Page() {
         const initDashboard = async () => {
             try {
                 await anythingLLM.getOrCreateMasterDashboard();
-                debug("✅ Master SOW Dashboard initialized");
+                console.log("✅ Master SOW Dashboard initialized");
             } catch (error) {
-                error("❌ Failed to initialize dashboard:", error);
+                console.error("❌ Failed to initialize dashboard:", error);
             }
         };
         initDashboard();
@@ -348,7 +347,7 @@ export default function Page() {
             }
 
             if (oauthToken) {
-                debug("\u2705 OAuth token received from callback");
+                console.log("\u2705 OAuth token received from callback");
                 setOauthAccessToken(oauthToken);
                 setIsOAuthAuthorized(true);
                 toast.success(
@@ -362,7 +361,7 @@ export default function Page() {
                 );
             }
         } catch (e) {
-            warn("Error handling OAuth params:", e);
+            console.warn("Error handling OAuth params:", e);
         }
     }, []);
 
@@ -400,7 +399,7 @@ export default function Page() {
         ];
 
         setAvailableWorkspaces(workspaceList);
-        debug(
+        console.log(
             "📋 Available workspaces for dashboard chat:",
             workspaceList,
         );
@@ -416,7 +415,7 @@ export default function Page() {
         try {
             const editorContent =
                 editorRef.current?.getContent?.() || latestEditorJSON;
-            debug("🟡 Attempting to save (immediate)...", {
+            console.log("🟡 Attempting to save (immediate)...", {
                 docId,
                 hasEditorRef: !!editorRef.current,
                 hasGetContent: !!editorRef.current?.getContent,
@@ -427,13 +426,13 @@ export default function Page() {
                     : null,
             });
             try {
-                debug(
+                console.log(
                     "📦 Editor JSON to save (immediate):",
                     JSON.stringify(editorContent),
                 );
             } catch (_) {}
             if (!editorContent) {
-                warn(
+                console.warn(
                     "⚠️ saveCurrentSOWNow: No editor content to save for:",
                     docId,
                 );
@@ -457,7 +456,7 @@ export default function Page() {
 
             const docMeta = documents.find((d) => d.id === docId);
 
-            debug(
+            console.log(
                 "💾 Saving SOW before navigation:",
                 docId,
                 `(Total: $${(isNaN(totalInvestment) ? 0 : totalInvestment).toFixed(2)})`,
@@ -477,7 +476,7 @@ export default function Page() {
             });
 
             if (!response.ok) {
-                error(
+                console.error(
                     "❌ SAVE FAILED for",
                     docId,
                     "Status:",
@@ -485,10 +484,10 @@ export default function Page() {
                 );
                 return false;
             }
-            debug("✅ SAVE SUCCESS for", docId);
+            console.log("✅ SAVE SUCCESS for", docId);
             return true;
         } catch (error) {
-            error("❌ Error in saveCurrentSOWNow:", error);
+            console.error("❌ Error in saveCurrentSOWNow:", error);
             return false;
         }
     };
@@ -497,7 +496,7 @@ export default function Page() {
         if (id === currentDocId) return; // No-op if selecting the same doc
 
         (async () => {
-            debug(
+            console.log(
                 "➡️ NAVIGATION TRIGGERED for SOW",
                 id,
                 ". Starting save for",
@@ -508,14 +507,14 @@ export default function Page() {
             if (currentDocId) {
                 const ok = await saveCurrentSOWNow(currentDocId);
                 if (!ok) {
-                    error(
+                    console.error(
                         "❌ SAVE FAILED for",
                         currentDocId,
                         ". Halting navigation.",
                     );
                     return; // Abort navigation on save failure
                 }
-                debug(
+                console.log(
                     "✅ SAVE SUCCESS for",
                     currentDocId,
                     ". Now loading new document.",
@@ -538,7 +537,7 @@ export default function Page() {
             
             // If document not found in local state, try fetching from database
             if (!nextDoc) {
-                debug("⚠️ Document not found in local state, fetching from database:", id);
+                console.log("⚠️ Document not found in local state, fetching from database:", id);
                 try {
                     const response = await fetch(`/api/sow/${id}`);
                     if (response.ok) {
@@ -553,7 +552,7 @@ export default function Page() {
                                     ? JSON.parse(sow.content)
                                     : sow.content;
                             } catch (e) {
-                                warn("Failed to parse SOW content:", sow.id);
+                                console.warn("Failed to parse SOW content:", sow.id);
                                 parsedContent = defaultEditorContent;
                             }
                         }
@@ -584,21 +583,21 @@ export default function Page() {
                             }
                         });
                         
-                        debug("✅ Document loaded from database:", id);
+                        console.log("✅ Document loaded from database:", id);
                     } else {
-                        error("❌ Document not found in database:", id);
+                        console.error("❌ Document not found in database:", id);
                         toast.error("Document not found. Please refresh the page.");
                         return;
                     }
                 } catch (error) {
-                    error("❌ Error fetching document from database:", error);
+                    console.error("❌ Error fetching document from database:", error);
                     toast.error("Failed to load document. Please try again.");
                     return;
                 }
             }
             
             if (editorRef.current) {
-                debug("📄 Loading content for SOW", id, "...");
+                console.log("📄 Loading content for SOW", id, "...");
                 try {
                     // Wait a brief moment to ensure editor is ready
                     await new Promise(resolve => setTimeout(resolve, 100));
@@ -608,15 +607,15 @@ export default function Page() {
                     } else if (editorRef.current.insertContent) {
                         editorRef.current.insertContent(nextDoc.content);
                     } else {
-                        warn("⚠️ Editor methods not available, content may not load");
+                        console.warn("⚠️ Editor methods not available, content may not load");
                     }
-                    debug("✅ LOAD SUCCESS for", id);
+                    console.log("✅ LOAD SUCCESS for", id);
                 } catch (error) {
-                    error("❌ Error loading document content:", error);
+                    console.error("❌ Error loading document content:", error);
                     toast.error("Failed to load document content. Please try again.");
                 }
             } else {
-                warn("⚠️ Editor ref not available yet, content will load when editor initializes");
+                console.warn("⚠️ Editor ref not available yet, content will load when editor initializes");
             }
 
             // Ensure we are in editor view
@@ -658,7 +657,7 @@ export default function Page() {
         // 🧵 Only create AnythingLLM thread if NOT Unfiled and has workspace
         if (!isUnfiledFolder && workspaceSlug) {
             try {
-                debug(
+                console.log(
                     `🔗 Creating thread in workspace: ${workspaceSlug}`,
                 );
                 // Don't pass thread name - AnythingLLM auto-names based on first chat message
@@ -672,7 +671,7 @@ export default function Page() {
                     };
 
                     // 📊 Embed SOW in master 'gen' workspace and master dashboard
-                    debug(`📊 Embedding new SOW in master workspaces`);
+                    console.log(`📊 Embedding new SOW in master workspaces`);
                     const sowContent = JSON.stringify(defaultEditorContent);
                     const clientContext = parentWorkspace?.name || "unknown";
                     await anythingLLM.embedSOWInBothWorkspaces(
@@ -685,7 +684,7 @@ export default function Page() {
                         `✅ SOW created in ${parentWorkspace?.name || "workspace"}`,
                     );
                 } else {
-                    warn(
+                    console.warn(
                         "⚠️ Thread creation failed - SOW created without thread",
                     );
                     toast.warning(
@@ -693,12 +692,12 @@ export default function Page() {
                     );
                 }
             } catch (error) {
-                error("❌ Error creating thread:", error);
+                console.error("❌ Error creating thread:", error);
                 toast.warning("SOW created but thread sync failed");
             }
         } else {
             // Unfiled or no workspace - just create the SOW
-            debug("ℹ️ Creating SOW in Unfiled (no workspace needed)");
+            console.log("ℹ️ Creating SOW in Unfiled (no workspace needed)");
             toast.success(
                 `✅ SOW created in Unfiled! Organize into folders later or start working now.`,
             );
@@ -724,13 +723,13 @@ export default function Page() {
                 const savedDoc = await saveResponse.json();
                 // Update newDoc with the database ID
                 newDoc = { ...newDoc, id: savedDoc.id || newId };
-                debug("✅ SOW saved to database with id:", newDoc.id);
+                console.log("✅ SOW saved to database with id:", newDoc.id);
             } else {
-                warn("⚠️ Failed to save SOW to database");
+                console.warn("⚠️ Failed to save SOW to database");
                 toast.warning("⚠️ SOW created but not saved to database");
             }
         } catch (error) {
-            error("❌ Error saving SOW to database:", error);
+            console.error("❌ Error saving SOW to database:", error);
             toast.error("⚠️ Failed to save SOW");
         }
 
@@ -789,7 +788,7 @@ export default function Page() {
                 }),
             );
         } catch (error) {
-            error("Error renaming document:", error);
+            console.error("Error renaming document:", error);
             setDocuments((prev) =>
                 prev.map((d) => (d.id === id ? { ...d, title } : d)),
             );
@@ -808,9 +807,9 @@ export default function Page() {
             });
 
             if (deleteResponse.ok) {
-                debug("✅ SOW deleted from database:", id);
+                console.log("✅ SOW deleted from database:", id);
             } else {
-                warn("⚠️ Failed to delete SOW from database");
+                console.warn("⚠️ Failed to delete SOW from database");
                 toast.warning(
                     "⚠️ SOW deleted from UI but database deletion failed",
                 );
@@ -825,7 +824,7 @@ export default function Page() {
                 toast.success(`✅ SOW and thread deleted`);
             }
         } catch (error) {
-            error("Error deleting SOW:", error);
+            console.error("Error deleting SOW:", error);
             toast.error("Failed to delete SOW");
         }
 
@@ -866,7 +865,7 @@ export default function Page() {
             }
 
             const savedFolder = await response.json();
-            debug("✅ Folder saved to database:", savedFolder);
+            console.log("✅ Folder saved to database:", savedFolder);
 
             // Create workspace (folders and workspaces are the same)
             const newWorkspace: Workspace = {
@@ -887,7 +886,7 @@ export default function Page() {
             // This creates an empty SOW and opens it immediately
             await handleNewDoc(newWorkspace.id);
         } catch (error) {
-            error("Error creating folder:", error);
+            console.error("Error creating folder:", error);
             toast.error(`❌ Failed to create folder: ${error.message}`);
         }
     };
@@ -922,7 +921,7 @@ export default function Page() {
             );
             toast.success(`✅ Folder renamed to "${name}"`);
         } catch (error) {
-            error("Error renaming folder:", error);
+            console.error("Error renaming folder:", error);
             toast.error("❌ Failed to rename folder");
         }
     };
@@ -966,7 +965,7 @@ export default function Page() {
             );
             toast.success(`✅ Folder deleted from database`);
         } catch (error) {
-            error("Error deleting folder:", error);
+            console.error("Error deleting folder:", error);
             toast.error("❌ Failed to delete folder");
         }
     };
@@ -983,7 +982,7 @@ export default function Page() {
         workspaceType: "sow" | "client" | "generic" = "sow",
     ) => {
         try {
-            debug("📁 Creating workspace folder:", workspaceName);
+            console.log("📁 Creating workspace folder:", workspaceName);
 
             // 📊 SHOW PROGRESS MODAL
             setWorkspaceCreationProgress({
@@ -994,21 +993,15 @@ export default function Page() {
             });
 
             // 🏢 STEP 1: Create new AnythingLLM workspace with system prompt
-            debug(
+            console.log(
                 `🏢 Creating AnythingLLM workspace: ${workspaceName}...`,
             );
             const workspace =
                 await anythingLLM.createWorkspaceWithPrompt(workspaceName);
-            
-            // 🛡️ GUARD: Ensure workspace has a slug before proceeding
-            if (!workspace?.slug) {
-                throw new Error("Failed to create workspace: Missing workspace slug");
-            }
-            
             const embedId = await anythingLLM.getOrCreateEmbedId(
                 workspace.slug,
             );
-            debug(
+            console.log(
                 `✅ Workspace created with system prompt: ${workspace.slug}`,
             );
 
@@ -1020,7 +1013,7 @@ export default function Page() {
             }));
 
             // 💾 STEP 2: Save folder to DATABASE
-            debug("💾 Saving folder to database...");
+            console.log("💾 Saving folder to database...");
             const folderResponse = await fetch("/api/folders", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1041,7 +1034,7 @@ export default function Page() {
 
             const folderData = await folderResponse.json();
             const folderId = folderData.id;
-            debug("✅ Folder saved to database with ID:", folderId);
+            console.log("✅ Folder saved to database with ID:", folderId);
 
             // Mark step 2 complete
             setWorkspaceCreationProgress((prev) => ({
@@ -1051,7 +1044,6 @@ export default function Page() {
             }));
 
             // Create workspace in local state (folders and workspaces are the same)
-            // Note: We'll add this to state later after SOW is created to avoid duplication
             const newWorkspace: Workspace = {
                 id: folderId,
                 name: workspaceName,
@@ -1063,13 +1055,15 @@ export default function Page() {
                 syncedAt: new Date().toISOString(),
             };
 
+            setWorkspaces((prev) => [...prev, newWorkspace]);
+
             // IMMEDIATELY CREATE A BLANK SOW with meaningful title
             const today = new Date();
             const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             const sowTitle = `${workspaceName} - SOW ${dateStr}`;
 
             // Save SOW to database with folder ID
-            debug("📄 Creating SOW in database");
+            console.log("📄 Creating SOW in database");
             const sowResponse = await fetch("/api/sow/create", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1089,12 +1083,12 @@ export default function Page() {
 
             const sowData = await sowResponse.json();
             const sowId = sowData.id || sowData.sowId;
-            debug("✅ SOW created with ID:", sowId);
+            console.log("✅ SOW created with ID:", sowId);
 
             // 🧵 STEP 3: Create AnythingLLM thread in workspace
-            debug("🧵 Creating thread in workspace...");
+            console.log("🧵 Creating thread in workspace...");
             const thread = await anythingLLM.createThread(workspace.slug);
-            debug("✅ Thread created:", thread.slug);
+            console.log("✅ Thread created:", thread.slug);
 
             // 🔍 VERIFICATION: Confirm system prompt is loaded in workspace
             try {
@@ -1103,19 +1097,19 @@ export default function Page() {
                     const promptLength = workspaceDetails.openAiPrompt.length;
                     const hasArchitectPrompt = workspaceDetails.openAiPrompt.includes("The Architect") || 
                                                workspaceDetails.openAiPrompt.includes("Archie");
-                    debug(`✅ System Prompt Verification:`, {
+                    console.log(`✅ System Prompt Verification:`, {
                         promptLength,
                         hasArchitectPrompt,
                         preview: workspaceDetails.openAiPrompt.substring(0, 100) + "..."
                     });
                     if (!hasArchitectPrompt) {
-                        warn("⚠️ System prompt may not be the expected Architect prompt");
+                        console.warn("⚠️ System prompt may not be the expected Architect prompt");
                     }
                 } else {
-                    warn("⚠️ System prompt not found in workspace details");
+                    console.warn("⚠️ System prompt not found in workspace details");
                 }
             } catch (error) {
-                warn("⚠️ Could not verify system prompt:", error);
+                console.warn("⚠️ Could not verify system prompt:", error);
             }
 
             // Update SOW with thread info
@@ -1137,7 +1131,7 @@ export default function Page() {
 
             // 📊 STEP 4: Embed SOW in workspace and master dashboard (optional - skip if empty)
             // Sequential Workflow Protocol: This step is non-blocking to maintain Guaranteed System Reliability
-            debug("📊 [STEP 4] Embedding SOW in workspaces (Sequential Workflow Protocol)...");
+            console.log("📊 [STEP 4] Embedding SOW in workspaces (Sequential Workflow Protocol)...");
             const sowContent = JSON.stringify(defaultEditorContent);
             const embedSuccess = await anythingLLM.embedSOWInBothWorkspaces(
                 sowTitle,
@@ -1149,9 +1143,9 @@ export default function Page() {
                 // Non-fatal: Log warning but don't block SOW creation
                 // Embedding will happen automatically when content is generated
                 // This maintains Guaranteed System Reliability by not cascading failures
-                warn("⚠️ [STEP 4] SOW embedding skipped or failed (content may be empty). Will embed when content is generated. (Non-blocking - workflow continues)");
+                console.warn("⚠️ [STEP 4] SOW embedding skipped or failed (content may be empty). Will embed when content is generated. (Non-blocking - workflow continues)");
             } else {
-                debug("✅ [STEP 4] SOW embedded in workspaces - awaiting confirmation...");
+                console.log("✅ [STEP 4] SOW embedded in workspaces - awaiting confirmation...");
                 
                 // 🔍 VERIFICATION: Wait for embedding to be confirmed (retry logic)
                 // This ensures the backend has fully processed the link before we proceed
@@ -1166,16 +1160,16 @@ export default function Page() {
                         const workspaceDetails = await anythingLLM.getWorkspaceDetails(workspace.slug);
                         if (workspaceDetails?.documents && workspaceDetails.documents.length > 0) {
                             embeddingConfirmed = true;
-                            debug(`✅ Embedding confirmed on attempt ${attempt + 1}`);
+                            console.log(`✅ Embedding confirmed on attempt ${attempt + 1}`);
                             break;
                         }
                     } catch (error) {
-                        warn(`⚠️ Embedding verification attempt ${attempt + 1} failed:`, error);
+                        console.warn(`⚠️ Embedding verification attempt ${attempt + 1} failed:`, error);
                     }
                 }
                 
                 if (!embeddingConfirmed) {
-                    warn("⚠️ Could not verify embedding, but proceeding anyway (may be a timing issue)");
+                    console.warn("⚠️ Could not verify embedding, but proceeding anyway (may be a timing issue)");
                 }
             }
 
@@ -1196,19 +1190,8 @@ export default function Page() {
             // Update workspace with the SOW
             newWorkspace.sows = [newSOW];
 
-            // Update state - check if workspace already exists to avoid duplicates
-            setWorkspaces((prev) => {
-                const existingIndex = prev.findIndex(w => w.id === folderId);
-                if (existingIndex >= 0) {
-                    // Update existing workspace
-                    const updated = [...prev];
-                    updated[existingIndex] = newWorkspace;
-                    return updated;
-                } else {
-                    // Add new workspace at the beginning
-                    return [newWorkspace, ...prev];
-                }
-            });
+            // Update state
+            setWorkspaces((prev) => [newWorkspace, ...prev]);
             setCurrentWorkspaceId(folderId);
             setCurrentSOWId(sowId);
             setViewMode("editor");
@@ -1242,7 +1225,7 @@ export default function Page() {
             }));
             handleSelectDoc(sowId, newDoc);
         } catch (error) {
-            error("❌ Error creating workspace:", error);
+            console.error("❌ Error creating workspace:", error);
             toast.error("Failed to create workspace. Please try again.");
             setWorkspaceCreationProgress((prev) => ({
                 ...prev,
@@ -1282,7 +1265,7 @@ export default function Page() {
             }
 
             const result = await dbResponse.json();
-            debug(`✅ Workspace deletion result:`, result);
+            console.log(`✅ Workspace deletion result:`, result);
 
             // Update state
             setWorkspaces((prev) => prev.filter((ws) => ws.id !== workspaceId));
@@ -1373,13 +1356,13 @@ export default function Page() {
                     setDocuments(documentsFromDB);
                 }
             } catch (e) {
-                warn(
+                console.warn(
                     "⚠️ Post-delete refresh failed; UI may still be accurate due to optimistic update.",
                     e,
                 );
             }
         } catch (error) {
-            error("Error deleting workspace:", error);
+            console.error("Error deleting workspace:", error);
             toast.error(
                 `Failed to delete workspace: ${error instanceof Error ? error.message : String(error)}`,
             );
@@ -1388,7 +1371,7 @@ export default function Page() {
 
     const handleCreateSOW = async (workspaceId: string, sowName: string) => {
         try {
-            debug("🆕 handleCreateSOW called with:", {
+            console.log("🆕 handleCreateSOW called with:", {
                 workspaceId,
                 sowName,
             });
@@ -1396,7 +1379,7 @@ export default function Page() {
             // 🛡️ CRITICAL: Prevent duplicate creation - check if a temp SOW already exists
             const hasTempSOW = documents.some((doc) => doc.id.startsWith("temp-"));
             if (hasTempSOW) {
-                warn("⚠️ SOW creation already in progress, ignoring duplicate request");
+                console.warn("⚠️ SOW creation already in progress, ignoring duplicate request");
                 return;
             }
 
@@ -1444,7 +1427,7 @@ export default function Page() {
             );
 
             // 🎯 CRITICAL: Switch to editor view IMMEDIATELY
-            debug("📊 Switching to editor view immediately");
+            console.log("📊 Switching to editor view immediately");
             setViewMode("editor");
             toast.success(`✅ SOW "${sowName}" created - opening editor...`);
 
@@ -1452,7 +1435,7 @@ export default function Page() {
             // This happens asynchronously after the UI has switched
             (async () => {
                 try {
-                    debug("🔄 [Background] Starting heavy operations...");
+                    console.log("🔄 [Background] Starting heavy operations...");
 
                     // 🎯 DATA ISOLATION FIX: Use Client Workspace, NOT Master SOW Workspace
                     const targetWorkspace = workspaces.find(w => w.id === workspaceId);
@@ -1462,20 +1445,20 @@ export default function Page() {
                         throw new Error(`Target workspace slug not found for ID: ${workspaceId}`);
                     }
 
-                    debug(
+                    console.log(
                         `🔄 [Background] Using client workspace: ${targetSlug}`,
                     );
 
                     // Create actual thread in AnythingLLM (Client Workspace)
                     const thread = await anythingLLM.createThread(targetSlug);
                     if (!thread) {
-                        error(
+                        console.error(
                             "❌ [Background] Failed to create thread in AnythingLLM",
                         );
                         return;
                     }
 
-                    debug(
+                    console.log(
                         `🔄 [Background] AnythingLLM thread created: ${thread.slug}`,
                     );
 
@@ -1496,7 +1479,7 @@ export default function Page() {
                     });
 
                     if (!saveResponse.ok) {
-                        warn(
+                        console.warn(
                             "⚠️ [Background] Failed to save SOW to database",
                         );
                     }
@@ -1532,11 +1515,11 @@ export default function Page() {
                         ),
                     );
 
-                    debug(
+                    console.log(
                         `✅ [Background] SOW "${sowName}" fully initialized with thread: ${thread.slug}`,
                     );
                 } catch (error) {
-                    error(
+                    console.error(
                         "❌ [Background] Error in heavy operations:",
                         error,
                     );
@@ -1544,7 +1527,7 @@ export default function Page() {
                 }
             })();
         } catch (error) {
-            error("❌ Error creating SOW:", error);
+            console.error("❌ Error creating SOW:", error);
             toast.error("Failed to create SOW");
         }
     };
@@ -1649,7 +1632,7 @@ export default function Page() {
                 body: JSON.stringify({ folderId: toWorkspaceId }),
             });
         } catch (error) {
-            error("❌ Failed to move SOW:", error);
+            console.error("❌ Failed to move SOW:", error);
             toast.error("Failed to move SOW");
         }
     };
@@ -1696,12 +1679,12 @@ export default function Page() {
                 currentDoc.title.split(":")[1]?.split("-")[0]?.trim() ||
                 "Default Client";
 
-            debug("🚀 Starting embed process for:", currentDoc.title);
+            console.log("🚀 Starting embed process for:", currentDoc.title);
 
             // Create or get workspace (this is fast)
             const workspaceSlug =
                 await anythingLLM.getMasterSOWWorkspace(clientName);
-            debug("✅ Workspace ready:", workspaceSlug);
+            console.log("✅ Workspace ready:", workspaceSlug);
 
             // Get HTML content
             const htmlContent = editorRef.current.getHTML();
@@ -1743,7 +1726,7 @@ export default function Page() {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ workspaceSlug }),
                     }).catch((err) =>
-                        warn("Failed to save workspace slug:", err),
+                        console.warn("Failed to save workspace slug:", err),
                     );
                 }
             } else {
@@ -1752,7 +1735,7 @@ export default function Page() {
                 });
             }
         } catch (error: any) {
-            error("❌ Error embedding to AI:", error);
+            console.error("❌ Error embedding to AI:", error);
             toast.dismiss(toastId);
             toast.error(`Error: ${error.message || "Unknown error"}`, {
                 duration: 7000,
@@ -1793,7 +1776,7 @@ export default function Page() {
             const baseUrl = window.location.origin;
             const shareLink = `${baseUrl}/portal/sow/${currentDocId}`;
 
-            debug("📤 Share link generated:", shareLink);
+            console.log("📤 Share link generated:", shareLink);
 
             // Copy to clipboard with fallback
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1821,7 +1804,7 @@ export default function Page() {
 
             toast.success("✅ Share link copied to clipboard!");
         } catch (error) {
-            error("Error sharing:", error);
+            console.error("Error sharing:", error);
             toast.error("Failed to copy link");
         }
     };
@@ -1846,7 +1829,7 @@ export default function Page() {
                         pricingTableNode.attrs.showTotal !== undefined
                             ? pricingTableNode.attrs.showTotal
                             : true;
-                    debug(
+                    console.log(
                         "🎯 Show Pricing Summary in PDF:",
                         showPricingSummary,
                     );
@@ -1875,7 +1858,7 @@ export default function Page() {
                         contentForExport = cloned;
                     }
                 } catch (e) {
-                    warn(
+                    console.warn(
                         "⚠️ Failed to clone content for PDF export; proceeding without hiding summary.",
                         e,
                     );
@@ -1888,16 +1871,16 @@ export default function Page() {
             if (editorRef.current && typeof editorRef.current.getHTML === 'function') {
                 try {
                     editorHTML = editorRef.current.getHTML();
-                    debug("📝 [PDF Export] Using editor.getHTML()");
+                    console.log("📝 [PDF Export] Using editor.getHTML()");
                 } catch (e) {
-                    warn("⚠️ [PDF Export] editor.getHTML() failed, falling back to tiptapToHTML:", e);
+                    console.warn("⚠️ [PDF Export] editor.getHTML() failed, falling back to tiptapToHTML:", e);
                 }
             }
             
             // Fallback to tiptapToHTML if editor HTML is not available or empty
             if (!editorHTML || editorHTML.trim() === "" || editorHTML === "<p></p>") {
                 editorHTML = tiptapToHTML(contentForExport);
-                debug("📝 [PDF Export] Using tiptapToHTML() fallback");
+                console.log("📝 [PDF Export] Using tiptapToHTML() fallback");
             }
 
             // Check if document has actual content - validate both HTML and JSON structure
@@ -1957,7 +1940,7 @@ export default function Page() {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                error("PDF service error:", errorText);
+                console.error("PDF service error:", errorText);
                 toast.error(`❌ PDF service error: ${response.status}`);
                 throw new Error(`PDF service error: ${errorText}`);
             }
@@ -1975,7 +1958,7 @@ export default function Page() {
 
             toast.success("✅ PDF downloaded successfully!");
         } catch (error) {
-            error("Error exporting PDF:", error);
+            console.error("Error exporting PDF:", error);
             toast.error(`❌ Error exporting PDF: ${error.message}`);
         }
     };
@@ -1997,7 +1980,7 @@ export default function Page() {
                 editorRef.current?.getContent?.() ||
                 latestEditorJSON ||
                 currentDoc.content;
-            debug("📝 [PDF Export] Editor JSON:", editorJSON);
+            console.log("📝 [PDF Export] Editor JSON:", editorJSON);
 
             // 🎯 Extract showTotal flag from pricing table node (if exists) - same as standard PDF export
             let showPricingSummary = true; // Default to true
@@ -2010,7 +1993,7 @@ export default function Page() {
                         pricingTableNode.attrs.showTotal !== undefined
                             ? pricingTableNode.attrs.showTotal
                             : true;
-                    debug(
+                    console.log(
                         "🎯 [Professional PDF] Show Pricing Summary:",
                         showPricingSummary,
                     );
@@ -2023,17 +2006,17 @@ export default function Page() {
                 multiScopePricingData.scopes &&
                 multiScopePricingData.scopes.length > 0
             ) {
-                debug(
+                console.log(
                     `✅ [PDF Export] Found multi-scope data: ${multiScopePricingData.scopes.length} scopes`,
                 );
-                debug(
+                console.log(
                     "✅ [PDF Export] Using multi-scope professional format",
                 );
 
                 // 🎯 CRITICAL FIX: Ensure we use user prompt discount, not AI-generated discount
                 let transformedData;
                 if (userPromptDiscount > 0) {
-                    debug(
+                    console.log(
                         `💰 [DISCOUNT] Overriding AI discount with user prompt discount: ${userPromptDiscount}%`,
                     );
                     // Create a modified version of multiScopeData with user prompt discount
@@ -2059,10 +2042,10 @@ export default function Page() {
                     );
                 }
 
-                debug(
+                console.log(
                     "✅ [PDF Export] Transformed multi-scope data for backend",
                 );
-                debug(
+                console.log(
                     `✅ [PDF Export] Client Name: "${transformedData.clientName}"`,
                 );
 
@@ -2089,7 +2072,7 @@ export default function Page() {
                     } catch (e) {
                         errorText = `HTTP ${response.status}: ${response.statusText}`;
                     }
-                    error(
+                    console.error(
                         "❌ Professional PDF service error:",
                         errorText,
                     );
@@ -2116,51 +2099,29 @@ export default function Page() {
 
                 toast.success("✅ Professional PDF downloaded successfully!");
             } else {
-                debug(
+                console.log(
                     "📄 [PDF Export] Using standard HTML conversion (no multi-scope data)",
                 );
 
-                // Prepare document data for PDF export
-                // Ensure editorJSON is properly structured
-                const docForPDF: any = {
+                // Fallback to standard PDF export
+                const sowData = prepareSOWForNewPDF({
                     ...currentDoc,
-                    content: editorJSON || currentDoc.content,
-                    latestEditorJSON: editorJSON || (currentDoc as any).latestEditorJSON || currentDoc.content,
-                };
-                
-                debug("📝 [PDF Export] Document data for PDF:", {
-                    hasContent: !!docForPDF.content,
-                    hasLatestEditorJSON: !!docForPDF.latestEditorJSON,
-                    contentType: typeof docForPDF.content,
-                    contentTypeValue: docForPDF.content?.type,
-                    docId: docForPDF.id,
-                    docTitle: docForPDF.title,
+                    content: editorJSON,
                 });
 
-                // Fallback to standard PDF export
-                const sowData = prepareSOWForNewPDF(docForPDF);
-
                 if (!sowData) {
-                    error("❌ [PDF Export] prepareSOWForNewPDF returned null");
                     toast.error(
-                        "❌ Unable to generate PDF from current document. Please ensure your document has content.",
+                        "❌ Unable to generate PDF from current document",
                     );
                     return;
                 }
-
-                debug("✅ [PDF Export] SOW data prepared:", {
-                    scopesCount: sowData.scopes.length,
-                    totalItems: sowData.scopes.reduce((sum, s) => sum + s.items.length, 0),
-                    hasProjectTitle: !!sowData.projectTitle,
-                    hasClientName: !!sowData.clientName,
-                });
 
                 setNewPDFData(sowData);
                 setShowNewPDFModal(true);
                 toast.success("✅ PDF ready! Click to download.");
             }
         } catch (error: any) {
-            error("❌ Error preparing new PDF:", error);
+            console.error("❌ Error preparing new PDF:", error);
             const errorMessage = error?.message || error?.toString() || "Unknown error occurred";
             toast.error(
                 `❌ PDF export failed: ${errorMessage}. Please try again or contact support if the issue persists.`,
@@ -2177,7 +2138,7 @@ export default function Page() {
 
         // 🎯 CRITICAL FIX: Validate that we have a valid SOW ID
         if (!currentDoc.id) {
-            error(
+            console.error(
                 "❌ [Excel Export] Current document has no ID:",
                 currentDoc,
             );
@@ -2189,12 +2150,12 @@ export default function Page() {
 
         // Check if a document is selected
         if (!currentDoc || !currentDoc.id) {
-            error("❌ [Excel Export] No SOW document selected");
+            console.error("❌ [Excel Export] No SOW document selected");
             toast.error("Please select a document before exporting to Excel");
             return;
         }
 
-        debug(`📊 [Excel Export] Exporting SOW ID: ${currentDoc.id}`);
+        console.log(`📊 [Excel Export] Exporting SOW ID: ${currentDoc.id}`);
         toast.info("📊 Generating Excel...");
 
         try {
@@ -2206,7 +2167,7 @@ export default function Page() {
 
             if (!res.ok) {
                 const txt = await res.text();
-                error(
+                console.error(
                     `❌ [Excel Export] API Error (${res.status}):`,
                     txt,
                 );
@@ -2238,10 +2199,10 @@ export default function Page() {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
 
-            debug("✅ [Excel Export] Successfully exported Excel file");
+            console.log("✅ [Excel Export] Successfully exported Excel file");
             toast.success("✅ Excel downloaded successfully!");
         } catch (error: any) {
-            error("❌ [Excel Export] Error:", error);
+            console.error("❌ [Excel Export] Error:", error);
             // Provide more specific error message for SOW not found
             const errorMessage = error?.message || "Unknown error";
             if (errorMessage.includes("SOW not found")) {
@@ -2293,7 +2254,7 @@ export default function Page() {
                 toast.success("✅ Portal link copied (fallback)! SOW is now shareable.");
             }
         } catch (error: any) {
-            error("Error sharing portal:", error);
+            console.error("Error sharing portal:", error);
             toast.error(`❌ Error preparing portal: ${error.message}`);
         }
     };
@@ -2338,7 +2299,7 @@ export default function Page() {
                 </a>,
             );
         } catch (error: any) {
-            error("Error creating Google Sheet:", error);
+            console.error("Error creating Google Sheet:", error);
             toast.error(`❌ Error creating Google Sheet: ${error.message}`);
         }
     };
@@ -2372,8 +2333,6 @@ export default function Page() {
                         }}
                         onDeleteWorkspace={handleDeleteWorkspace}
                         onCreateSOW={handleCreateSOW}
-                        sidebarOpen={sidebarOpen}
-                        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
                     />
                 }
                 mainPanel={
@@ -2412,32 +2371,40 @@ export default function Page() {
                     </div>
                 )}
 
-                {viewMode === "editor" && (
-                    <EditorPanel
-                        currentDoc={currentDoc}
-                        editorRef={editorRef}
-                        onContentChange={setLatestEditorJSON}
-                        handleUpdateDoc={(content: any) => {
-                            // Trigger auto-save by updating latestEditorJSON
-                            setLatestEditorJSON(content);
-                        }}
-                        onShare={handleShare}
-                        onExportPDF={handleExportPDF}
-                        onExportNewPDF={handleExportNewPDF}
-                        onExportExcel={undefined}
-                        onSharePortal={undefined}
-                        onOpenAIChat={handleOpenAIChat}
-                        isGrandTotalVisible={isGrandTotalVisible}
-                        toggleGrandTotal={setIsGrandTotalVisible}
-                        onCreateWorkspace={() => {
-                            setCreateWorkspaceType("sow");
-                            setCreateWorkspaceDialogOpen(true);
-                        }}
-                        onOpenOnboarding={() => setShowOnboarding(true)}
-                        workspaceCount={workspaces.length}
-                        isLoading={isLoading}
-                    />
-                )}
+                {viewMode === "editor" &&
+                    (currentDoc ? (
+                        <EditorPanel
+                            currentDoc={currentDoc}
+                            editorRef={editorRef}
+                            onContentChange={setLatestEditorJSON}
+                            handleUpdateDoc={(content: any) => {
+                                // Trigger auto-save by updating latestEditorJSON
+                                setLatestEditorJSON(content);
+                            }}
+                            onShare={handleShare}
+                            onExportPDF={handleExportPDF}
+                            onExportNewPDF={handleExportNewPDF}
+                            onExportExcel={undefined}
+                            onSharePortal={undefined}
+                            onOpenAIChat={handleOpenAIChat}
+                            isGrandTotalVisible={isGrandTotalVisible}
+                            toggleGrandTotal={setIsGrandTotalVisible}
+                            onCreateWorkspace={() => {
+                                setCreateWorkspaceType("sow");
+                                setCreateWorkspaceDialogOpen(true);
+                            }}
+                        />
+                    ) : (
+                        <HomeWelcome
+                            onCreateWorkspace={() => {
+                                setCreateWorkspaceType("sow");
+                                setCreateWorkspaceDialogOpen(true);
+                            }}
+                            onOpenOnboarding={() => setShowOnboarding(true)}
+                            workspaceCount={workspaces.length}
+                            isLoading={isLoading}
+                        />
+                    ))}
                 </>
                 }
                 rightPanel={

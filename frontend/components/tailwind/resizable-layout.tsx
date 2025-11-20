@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { Menu, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, Sparkles } from "lucide-react";
 
 interface ResizableLayoutProps {
   leftPanel: React.ReactNode;
@@ -38,10 +38,15 @@ export function ResizableLayout({
   onToggleAiChat,
   viewMode = 'editor', // Default to editor mode
 }: ResizableLayoutProps) {
+  const [mounted, setMounted] = useState(false);
   const [chatWidth, setChatWidth] = useState(384); // w-96 = 384px
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -70,19 +75,21 @@ export function ResizableLayout({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, chatWidth]);
+  }, [isResizing]);
+
+  if (!mounted) return null;
 
   return (
-    <div className="h-screen w-screen flex flex-col relative" suppressHydrationWarning>
+    <div className="h-screen w-screen flex flex-col relative">
       {/* PERSISTENT LEFT SIDEBAR TOGGLE TAB - ALWAYS VISIBLE */}
-      {!sidebarOpen && onToggleSidebar && (
+      {!sidebarOpen && (
         <button
           onClick={onToggleSidebar}
-          className="fixed left-0 top-20 z-40 bg-[#1CBF79] hover:bg-[#15a366] text-black p-2.5 md:p-2 rounded-r-lg transition-all duration-300 shadow-lg hover:shadow-xl active:scale-95"
+          className="fixed left-0 top-20 z-40 bg-[#1CBF79] hover:bg-[#15a366] text-black p-2 rounded-r-lg transition-all duration-300 shadow-lg"
           title="Open sidebar"
           aria-label="Open sidebar"
         >
-          <Menu className="w-5 h-5 md:w-4 md:h-4" />
+          <Menu className="w-5 h-5" />
         </button>
       )}
 
@@ -102,10 +109,9 @@ export function ResizableLayout({
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT SIDEBAR - FIXED WIDTH OR 0 */}
         <div 
-          className={`h-full overflow-y-auto overflow-x-visible flex-shrink-0 border-r border-gray-700 transition-all duration-300 ease-in-out ${
-            sidebarOpen ? 'w-[500px]' : 'w-0 border-r-0'
+          className={`h-full overflow-y-auto overflow-x-hidden flex-shrink-0 border-r border-gray-700 transition-all duration-300 ${
+            sidebarOpen ? 'w-80' : 'w-0 border-r-0'
           }`}
-          style={sidebarOpen ? { minWidth: '500px' } : {}}
         >
           {sidebarOpen && leftPanel}
         </div>

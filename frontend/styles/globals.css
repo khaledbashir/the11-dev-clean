@@ -178,7 +178,7 @@
   /* Sidebar resize handle */
   .sidebar-nav-container {
     resize: horizontal;
-    min-width: 256px;
+    min-width: 300px;
     max-width: 512px;
   }
   
@@ -205,5 +205,18 @@
   /* Fix truncation in sidebar workspaces section */
   .workspaces-section {
     width: fit-content;
+  }
+  
+  /* Revert text truncation in sidebar folder/document names */
+  .flex-1.min-w-0.mr-2.overflow-hidden,
+  .flex-1.min-w-0.mr-0\.5.overflow-hidden {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+  }
+  
+  /* Set min-width on main sidebar container */
+  .sidebar-nav-container.w-96 {
+    min-width: 300px !important;
   }
 }
