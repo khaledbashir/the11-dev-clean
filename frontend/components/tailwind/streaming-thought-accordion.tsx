@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { ChevronDown } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Button } from "./ui/button";
 
 interface StreamingThoughtAccordionProps {
   content: string; // Full content including <think> tags
@@ -208,22 +207,9 @@ export function StreamingThoughtAccordion({
             <span className="text-xs text-gray-400 ml-auto">Pricing Data</span>
           </summary>
           <div className="px-4 py-3 bg-[#000000]/50 border-t border-[#20e28f]/30">
-            <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto mb-3">
+            <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
               {JSON.stringify(jsonBlock, null, 2)}
             </pre>
-            <Button
-              onClick={() => {
-                // Insert the full visible payload (which, in this case, is just the JSON block)
-                if (!buildInsertPayload || !buildInsertPayload.trim()) {
-                  console.warn("⚠️ [Accordion] Cannot insert: payload is empty");
-                  return;
-                }
-                onInsertClick?.(buildInsertPayload);
-              }}
-              className="w-full bg-[#20e28f] hover:bg-[#1db876] text-black font-semibold py-2 px-3 rounded"
-            >
-              ✅ Insert into Editor
-            </Button>
           </div>
         </details>
       </div>
@@ -349,28 +335,6 @@ export function StreamingThoughtAccordion({
                     }`} {...props}>
                       {children}
                     </code>
-                    {isJsonBlock && (
-                      <Button
-                        onClick={() => {
-                          // Insert the full payload (narrative + JSON), not just the JSON block
-                          if (!buildInsertPayload || !buildInsertPayload.trim()) {
-                            console.warn("⚠️ [Accordion] Cannot insert: payload is empty");
-                            return;
-                          }
-                          console.log('📋 [Accordion] Inserting full payload from JSON code block button:', {
-                            payloadLength: buildInsertPayload.length,
-                            hasJson: /```json/i.test(buildInsertPayload),
-                            preview: buildInsertPayload.substring(0, 150),
-                          });
-                          onInsertClick?.(buildInsertPayload);
-                        }}
-                        className="absolute top-2 right-2 bg-[#20e28f] hover:bg-[#1db876] text-black text-xs font-semibold py-1.5 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        size="sm"
-                        title="Insert full SOW content (narrative + pricing table)"
-                      >
-                        📋 Insert All
-                      </Button>
-                    )}
                   </div>
                 );
               },
@@ -410,24 +374,6 @@ export function StreamingThoughtAccordion({
                 <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
                   {JSON.stringify(jsonBlock, null, 2)}
                 </pre>
-                <Button
-                  onClick={() => {
-                    // Insert the entire AI response payload (narrative + JSON), minus hidden thinking
-                    if (!buildInsertPayload || !buildInsertPayload.trim()) {
-                      console.warn("⚠️ [Accordion] Cannot insert: payload is empty");
-                      return;
-                    }
-                    console.log('✅ [Accordion] Inserting full payload from JSON accordion button:', {
-                      payloadLength: buildInsertPayload.length,
-                      hasJson: /```json/i.test(buildInsertPayload),
-                      preview: buildInsertPayload.substring(0, 150),
-                    });
-                    onInsertClick?.(buildInsertPayload);
-                  }}
-                  className="w-full bg-[#20e28f] hover:bg-[#1db876] text-black font-semibold py-2 px-3 rounded"
-                >
-                  ✅ Insert into Editor
-                </Button>
               </div>
             </details>
           )}

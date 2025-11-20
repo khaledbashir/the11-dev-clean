@@ -1185,12 +1185,59 @@ export default function WorkspaceChat({
                                             </div>
                                         )}
 
-                                        {/* Content rendering for user messages only */}
+                                        {/* Content rendering for user messages with markdown support */}
                                         <div className="space-y-3">
                                             {segments.map((seg, i) => (
                                                 <ReactMarkdown
                                                     key={i}
                                                     remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        // Headings
+                                                        h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-4 mb-2 text-white" {...props} />,
+                                                        h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-3 mb-2 text-white" {...props} />,
+                                                        h3: ({node, ...props}) => <h3 className="text-base font-bold mt-2 mb-1 text-white" {...props} />,
+                                                        // Paragraphs
+                                                        p: ({node, ...props}) => <p className="text-sm text-white mb-2 leading-relaxed" {...props} />,
+                                                        // Lists
+                                                        ul: ({node, ...props}) => <ul className="list-disc list-inside text-sm text-white mb-2 pl-2" {...props} />,
+                                                        ol: ({node, ...props}) => <ol className="list-decimal list-inside text-sm text-white mb-2 pl-2" {...props} />,
+                                                        li: ({node, ...props}) => <li className="text-sm text-white mb-1" {...props} />,
+                                                        // Tables with professional styling
+                                                        table: ({node, ...props}) => (
+                                                            <div className="overflow-x-auto my-3">
+                                                                <table className="w-full border-collapse border border-[#1b5e5e]" {...props} />
+                                                            </div>
+                                                        ),
+                                                        thead: ({node, ...props}) => <thead className="bg-[#0e2e33]" {...props} />,
+                                                        th: ({node, ...props}) => (
+                                                            <th className="border border-[#1b5e5e] px-3 py-2 text-left font-bold text-white text-xs" {...props} />
+                                                        ),
+                                                        td: ({node, ...props}) => (
+                                                            <td className="border border-[#1b5e5e] px-3 py-2 text-xs text-white" {...props} />
+                                                        ),
+                                                        tr: ({node, ...props}) => <tr className="hover:bg-[#1b5e5e]/20" {...props} />,
+                                                        // Code blocks
+                                                        code: ({node, className, children, ...props}: any) => {
+                                                            const isInline = !className?.includes('language-');
+                                                            return isInline ? (
+                                                                <code className="bg-[#0a0a0a] text-[#20e28f] px-2 py-1 rounded text-xs font-mono" {...props}>{children}</code>
+                                                            ) : (
+                                                                <code className="bg-[#0a0a0a] text-[#20e28f] block p-3 rounded text-xs font-mono overflow-x-auto mb-2 border border-[#1b5e5e]" {...props}>
+                                                                    {children}
+                                                                </code>
+                                                            );
+                                                        },
+                                                        pre: ({node, ...props}) => <pre className="mb-2" {...props} />,
+                                                        // Blockquotes
+                                                        blockquote: ({node, ...props}) => (
+                                                            <blockquote className="border-l-4 border-[#20e28f] pl-3 italic text-gray-300 my-2 text-sm" {...props} />
+                                                        ),
+                                                        // Strong and emphasis
+                                                        strong: ({node, ...props}) => <strong className="font-bold text-white" {...props} />,
+                                                        em: ({node, ...props}) => <em className="italic text-gray-200" {...props} />,
+                                                        // Horizontal rules
+                                                        hr: ({node, ...props}) => <hr className="border-t border-[#1b5e5e] my-3" {...props} />,
+                                                    }}
                                                     className="prose prose-invert max-w-none text-sm break-words whitespace-pre-wrap prose-pre:whitespace-pre-wrap prose-pre:overflow-x-auto"
                                                 >
                                                     {seg.content}
@@ -1217,20 +1264,6 @@ export default function WorkspaceChat({
                                                         ) : (
                                                             <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
                                                         )}
-                                                    </button>
-                                                    
-                                                    {/* Insert SOW Button */}
-                                                    <button
-                                                        onClick={() => {
-                                                            if (onInsertToEditor) {
-                                                                onInsertToEditor(msg.content);
-                                                                toast.success("✅ SOW content inserted into editor");
-                                                            }
-                                                        }}
-                                                        className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
-                                                        title="Insert SOW into editor"
-                                                    >
-                                                        <FileText className="w-3.5 h-3.5 text-gray-400 hover:text-[#1CBF79]" />
                                                     </button>
                                                     
                                                     {/* Copy JSON Button (only if JSON exists) */}
@@ -1306,73 +1339,26 @@ export default function WorkspaceChat({
                 </div>
             </ScrollArea>
 
-            {/* Sticky Action Bar - Outside ScrollArea, Always Visible */}
-            {(() => {
-                const lastAssistant = [...chatMessages]
-                    .reverse()
-                    .find((m) => m.role === "assistant");
-                if (!lastAssistant) return null;
-                return (
-                    <div className="flex-shrink-0 border-t border-[#1b5e5e] bg-[#0E2E33]/95 backdrop-blur-md p-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-xs text-gray-400">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                Latest AI response ready
-                            </div>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 px-4 text-xs font-medium border-[#1CBF79] text-[#1CBF79] hover:text-white hover:bg-[#1CBF79] transition-all duration-200"
-                                title="Insert the latest AI response into your SOW editor"
-                                onClick={() => {
-                                    // Strip thinking tags before inserting
-                                    let cleaned = lastAssistant.content;
-                                    cleaned = cleaned.replace(
-                                        /<thinking>([\s\S]*?)<\/thinking>/gi,
-                                        "",
-                                    );
-                                    cleaned = cleaned.replace(
-                                        /<think>([\s\S]*?)<\/think>/gi,
-                                        "",
-                                    );
-                                    cleaned = cleaned.replace(
-                                        /<AI_THINK>([\s\S]*?)<\/AI_THINK>/gi,
-                                        "",
-                                    );
-                                    cleaned = cleaned.replace(
-                                        /<tool_call>[\s\S]*?<\/tool_call>/gi,
-                                        "",
-                                    );
-                                    const trimmed = cleaned.trim();
-                                    if (!trimmed) {
-                                        toast.error("No content to insert. The AI response appears to be empty or contains only internal processing tags.");
-                                        return;
-                                    }
-                                    onInsertToEditor(trimmed);
-                                }}
-                            >
-                                <svg
-                                    className="w-3 h-3 mr-1.5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                    />
-                                </svg>
-                                Insert SOW
-                            </Button>
-                        </div>
-                    </div>
-                );
-            })()}
 
             {/* Input Area */}
             <div className="p-5 border-t border-[#0E2E33] bg-[#0e0f0f] space-y-3">
+                {/* Toggle Upload Area Button - Always Visible */}
+                <div className="flex items-center justify-between">
+                    <button
+                        onClick={() => {
+                            setIsUploadAreaHidden(!isUploadAreaHidden);
+                            if (isUploadAreaHidden) {
+                                setIsUploadAreaCollapsed(false);
+                            }
+                        }}
+                        className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-[#0E2E33]/50"
+                        title={isUploadAreaHidden ? "Show upload area" : "Hide upload area"}
+                    >
+                        <Paperclip className={`w-3.5 h-3.5 ${isUploadAreaHidden ? 'opacity-50' : ''}`} />
+                        <span>{isUploadAreaHidden ? 'Show' : 'Hide'} Upload Area</span>
+                    </button>
+                </div>
+
                 {/* Pending Files List with Drag-and-Drop */}
                 {pendingFiles.length > 0 && !isUploadAreaHidden && (
                     <div className="space-y-2">
