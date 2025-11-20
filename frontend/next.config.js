@@ -14,6 +14,11 @@ const nextConfig = {
     ignoreDuringBuilds: true, // Skip ESLint during build
   },
   
+  // Force Node.js runtime instead of edge to prevent CSS/layout issues
+  experimental: {
+    runtime: 'nodejs',
+  },
+  
   // Enable SWC minification (faster than Terser)
   // swcMinify: true, // Deprecated in Next.js 15
   
