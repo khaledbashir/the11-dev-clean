@@ -15,23 +15,23 @@ export default function EditorPanel({
     onSharePortal, // Accept onSharePortal from parent
     onCreateWorkspace,
     onOpenOnboarding,
+    workspaceCount,
+    isLoading,
 }: any) {
     return (
         <div className="w-full h-full flex flex-col">
-            {/* Document Status Bar - Only show when document is open */}
-            {currentDoc && (
-                <DocumentStatusBar
-                    title={currentDoc.title || "Untitled Statement of Work"}
-                    saveStatus="saved"
-                    isSaving={false}
-                    isGrandTotalVisible={isGrandTotalVisible}
-                    onToggleGrandTotal={toggleGrandTotal}
-                    onExportPDF={onExportPDF}
-                    onExportNewPDF={onExportNewPDF}
-                    onExportExcel={onExportExcel}
-                    onSharePortal={onSharePortal}
-                />
-            )}
+            {/* Header Bar - Always visible */}
+            <DocumentStatusBar
+                title={currentDoc ? (currentDoc.title || "Untitled Statement of Work") : "Social Garden SOW Generator"}
+                saveStatus={currentDoc ? "saved" : "saved"}
+                isSaving={false}
+                isGrandTotalVisible={isGrandTotalVisible}
+                onToggleGrandTotal={currentDoc ? toggleGrandTotal : undefined}
+                onExportPDF={currentDoc ? onExportPDF : undefined}
+                onExportNewPDF={currentDoc ? onExportNewPDF : undefined}
+                onExportExcel={currentDoc ? onExportExcel : undefined}
+                onSharePortal={currentDoc ? onSharePortal : undefined}
+            />
 
             {/* Main Content Area */}
             <div className="flex-1 overflow-auto" data-show-totals={isGrandTotalVisible}>
@@ -53,6 +53,8 @@ export default function EditorPanel({
                             }
                         }}
                         onOpenOnboarding={() => onOpenOnboarding?.()}
+                        workspaceCount={workspaceCount}
+                        isLoading={isLoading}
                     />
                 )}
             </div>

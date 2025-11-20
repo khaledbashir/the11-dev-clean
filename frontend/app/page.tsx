@@ -2405,40 +2405,32 @@ export default function Page() {
                     </div>
                 )}
 
-                {viewMode === "editor" &&
-                    (currentDoc ? (
-                        <EditorPanel
-                            currentDoc={currentDoc}
-                            editorRef={editorRef}
-                            onContentChange={setLatestEditorJSON}
-                            handleUpdateDoc={(content: any) => {
-                                // Trigger auto-save by updating latestEditorJSON
-                                setLatestEditorJSON(content);
-                            }}
-                            onShare={handleShare}
-                            onExportPDF={handleExportPDF}
-                            onExportNewPDF={handleExportNewPDF}
-                            onExportExcel={undefined}
-                            onSharePortal={undefined}
-                            onOpenAIChat={handleOpenAIChat}
-                            isGrandTotalVisible={isGrandTotalVisible}
-                            toggleGrandTotal={setIsGrandTotalVisible}
-                            onCreateWorkspace={() => {
-                                setCreateWorkspaceType("sow");
-                                setCreateWorkspaceDialogOpen(true);
-                            }}
-                        />
-                    ) : (
-                        <HomeWelcome
-                            onCreateWorkspace={() => {
-                                setCreateWorkspaceType("sow");
-                                setCreateWorkspaceDialogOpen(true);
-                            }}
-                            onOpenOnboarding={() => setShowOnboarding(true)}
-                            workspaceCount={workspaces.length}
-                            isLoading={isLoading}
-                        />
-                    ))}
+                {viewMode === "editor" && (
+                    <EditorPanel
+                        currentDoc={currentDoc}
+                        editorRef={editorRef}
+                        onContentChange={setLatestEditorJSON}
+                        handleUpdateDoc={(content: any) => {
+                            // Trigger auto-save by updating latestEditorJSON
+                            setLatestEditorJSON(content);
+                        }}
+                        onShare={handleShare}
+                        onExportPDF={handleExportPDF}
+                        onExportNewPDF={handleExportNewPDF}
+                        onExportExcel={undefined}
+                        onSharePortal={undefined}
+                        onOpenAIChat={handleOpenAIChat}
+                        isGrandTotalVisible={isGrandTotalVisible}
+                        toggleGrandTotal={setIsGrandTotalVisible}
+                        onCreateWorkspace={() => {
+                            setCreateWorkspaceType("sow");
+                            setCreateWorkspaceDialogOpen(true);
+                        }}
+                        onOpenOnboarding={() => setShowOnboarding(true)}
+                        workspaceCount={workspaces.length}
+                        isLoading={isLoading}
+                    />
+                )}
                 </>
                 }
                 rightPanel={
