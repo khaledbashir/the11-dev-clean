@@ -30,6 +30,7 @@ import {
     Check,
     Save,
     Undo2,
+    FileText,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1216,6 +1217,20 @@ export default function WorkspaceChat({
                                                         ) : (
                                                             <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
                                                         )}
+                                                    </button>
+                                                    
+                                                    {/* Insert SOW Button */}
+                                                    <button
+                                                        onClick={() => {
+                                                            if (onInsertToEditor) {
+                                                                onInsertToEditor(msg.content);
+                                                                toast.success("✅ SOW content inserted into editor");
+                                                            }
+                                                        }}
+                                                        className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
+                                                        title="Insert SOW into editor"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5 text-gray-400 hover:text-[#1CBF79]" />
                                                     </button>
                                                     
                                                     {/* Copy JSON Button (only if JSON exists) */}

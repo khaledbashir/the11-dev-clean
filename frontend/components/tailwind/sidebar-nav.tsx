@@ -206,6 +206,7 @@ export default function SidebarNav({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [localFolders, setLocalFolders] = useState(actualFolders);
   const [localDocuments, setLocalDocuments] = useState(documents);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
   // 🗑️ Multi-select deletion states
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
@@ -520,6 +521,28 @@ export default function SidebarNav({
         {/* Documents in Folder (when expanded) */}
         {isExpanded && (
           <div className="ml-6 space-y-0.5">
+            {/* New Doc Button - Similar to AnythingLLM's "New Thread" */}
+            {!isDeleteMode && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onCreateSOW) {
+                    const today = new Date();
+                    const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const sowName = `${folder.name} - SOW ${dateStr}`;
+                    onCreateSOW(folder.id, sowName);
+                  } else if (actualOnCreateDocument) {
+                    actualOnCreateDocument(folder.id, 'Untitled Document');
+                  }
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-gray-400 hover:text-[#1CBF79] hover:bg-gray-800/50 rounded transition-colors group"
+                title="Create new SOW in this workspace"
+              >
+                <Plus className="w-3.5 h-3.5 group-hover:text-[#1CBF79]" />
+                <span className="font-medium">New Doc</span>
+              </button>
+            )}
+            
             <SortableContext items={folderDocuments.map(d => d.id)} strategy={verticalListSortingStrategy}>
               {folderDocuments.map((doc) => (
                 <SortableDocumentItem key={doc.id} document={doc} />
@@ -662,97 +685,26 @@ export default function SidebarNav({
         <h2 className="text-xl font-bold text-white">Social Garden</h2>
       </div>
 
-      {/* STATIC LINKS SECTION */}
-      <div className="flex-shrink-0 p-4 space-y-2 border-b border-gray-800">
-        {/* Primary Create Workspace CTA */}
-        <div className="px-4 pb-3">
+      {/* WORKSPACES SECTION */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Search Bar with Create Button */}
+        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+          <Input
+            placeholder="Search workspaces..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 text-xs bg-gray-900 border-gray-700 text-gray-300 placeholder:text-gray-600 flex-1"
+          />
           <button
             onClick={() => {
               console.log('🆕 Create Workspace button clicked');
               onCreateWorkspace?.();
             }}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1CBF79] hover:bg-[#16a366] text-white text-sm font-semibold rounded-lg transition-colors"
+            className="p-1.5 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors flex-shrink-0"
+            title="Create new workspace"
           >
             <Plus className="w-4 h-4" />
-            Create Workspace
           </button>
-        </div>
-
-
-        {/* Reset All Button - Dangerous Action */}
-        <div className="px-4 pb-3">
-          <button
-            onClick={async () => {
-              if (
-                !confirm(
-                  "⚠️ DANGER: This will delete ALL workspaces and SOWs!\n\nThis action cannot be undone. Are you absolutely sure?",
-                )
-              ) {
-                return;
-              }
-
-              if (
-                !confirm(
-                  "🚨 FINAL WARNING: This will permanently delete:\n\n- All workspaces\n- All SOWs\n- All AnythingLLM workspaces\n\nType 'RESET' to confirm:",
-                )
-              ) {
-                return;
-              }
-
-              try {
-                const response = await fetch("/api/admin/reset-all", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    confirm: "RESET_ALL_DATA",
-                  }),
-                });
-
-                if (response.ok) {
-                  const result = await response.json();
-                  toast.success(
-                    `✅ Reset complete! Deleted ${result.results.folders_deleted} workspaces and ${result.results.sows_before} SOWs`,
-                  );
-                  // Reload the page to show clean state
-                  setTimeout(() => {
-                    window.location.reload();
-                  }, 1500);
-                } else {
-                  const error = await response.json();
-                  toast.error(`❌ Reset failed: ${error.error || "Unknown error"}`);
-                }
-              } catch (error) {
-                toast.error(`❌ Reset failed: ${error}`);
-              }
-            }}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-900/60 hover:bg-red-800/80 text-red-300 hover:text-red-200 text-xs font-semibold rounded-lg transition-colors border border-red-800/50"
-            title="Reset all data - DANGEROUS!"
-          >
-            <Trash2 className="w-4 h-4" />
-            Reset All Data
-          </button>
-        </div>
-
-        {/* Requirements link hidden per request */}
-      </div>
-
-      {/* WORKSPACES SECTION */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Search Bar */}
-        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-800">
-          <Input
-            placeholder="Search folders and documents..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 text-xs bg-gray-900 border-gray-700 text-gray-300 placeholder:text-gray-600"
-          />
-        </div>
-
-        {/* Documents Header */}
-        <div className="flex-shrink-0 px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">Documents</h3>
         </div>
 
         {/* Documents List */}
@@ -764,57 +716,7 @@ export default function SidebarNav({
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              {/* ALL DOCS SECTION */}
-              {(() => {
-                const allDocs = localDocuments.filter(d =>
-                  d.folderId === null &&
-                  d.title.toLowerCase().includes(searchQuery.toLowerCase())
-                );
-
-                return (
-                  <div className="space-y-1">
-                    <div
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                        currentFolderId === null
-                          ? 'text-[#1CBF79] bg-[#0e2e33]'
-                          : 'text-gray-300 hover:text-white hover:bg-gray-800/50'
-                      }`}
-                      onClick={() => setAllDocsExpanded(!allDocsExpanded)}
-                    >
-                      {allDocsExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-[#1CBF79]" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-[#1CBF79]" />
-                      )}
-                      <FileText className="w-4 h-4 text-[#1CBF79]" />
-                      <span>All Documents</span>
-                      <span className="ml-auto text-xs text-gray-500">({allDocs.length})</span>
-                    </div>
-
-                    {/* Show documents in All Docs when expanded */}
-                    {allDocsExpanded && allDocs.length > 0 && (
-                      <div className="ml-6 space-y-0.5">
-                        <SortableContext
-                          items={allDocs.map(d => d.id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {allDocs.map((doc) => (
-                            <SortableDocumentItem key={doc.id} document={doc} />
-                          ))}
-                        </SortableContext>
-                      </div>
-                    )}
-
-                    {allDocsExpanded && allDocs.length === 0 && (
-                      <div className="px-4 py-4 text-center">
-                        <p className="text-xs text-gray-500">Create a workspace to get started</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* FOLDERS SECTION */}
+              {/* WORKSPACES SECTION */}
               {(() => {
                 const clientFolders = localFolders.filter(f =>
                   !isAgentFolder(f) && !isSystemFolder(f) &&
@@ -834,20 +736,8 @@ export default function SidebarNav({
                         <ChevronRight className="w-4 h-4 text-[#1CBF79]" />
                       )}
                       <LayoutDashboard className="w-4 h-4 text-[#1CBF79]" />
-                      <span>Folders</span>
+                      <span>Workspaces</span>
                       <span className="ml-auto text-xs text-gray-500">({clientFolders.length})</span>
-                      <button
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          if (actualOnCreateFolder) {
-                            actualOnCreateFolder("New Folder");
-                          }
-                        }}
-                        className="p-1.5 hover:bg-gray-800/60 rounded-md text-gray-300 hover:text-white ml-2"
-                        title="New folder"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
                     </div>
 
                     {foldersExpanded && clientFolders.length > 0 && (
@@ -865,7 +755,7 @@ export default function SidebarNav({
 
                     {foldersExpanded && clientFolders.length === 0 && (
                       <div className="px-4 py-4 text-center">
-                        <p className="text-xs text-gray-600">No folders yet</p>
+                        <p className="text-xs text-gray-600">No workspaces yet</p>
                       </div>
                     )}
                   </div>
@@ -876,6 +766,82 @@ export default function SidebarNav({
         </ScrollArea>
       </div>
 
+      {/* SETTINGS SECTION - Bottom */}
+      <div className="flex-shrink-0 border-t border-gray-800">
+        <div className="px-4 py-2">
+          <button
+            onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+            className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors"
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Settings</span>
+            {showSettingsMenu ? (
+              <ChevronDown className="w-3 h-3 ml-auto" />
+            ) : (
+              <ChevronRight className="w-3 h-3 ml-auto" />
+            )}
+          </button>
+          
+          {/* Settings Menu */}
+          {showSettingsMenu && (
+            <div className="mt-2 space-y-1">
+            <button
+              onClick={async () => {
+                if (
+                  !confirm(
+                    "⚠️ DANGER: This will delete ALL workspaces and SOWs!\n\nThis action cannot be undone. Are you absolutely sure?",
+                  )
+                ) {
+                  return;
+                }
+
+                if (
+                  !confirm(
+                    "🚨 FINAL WARNING: This will permanently delete:\n\n- All workspaces\n- All SOWs\n- All AnythingLLM workspaces\n\nType 'RESET' to confirm:",
+                  )
+                ) {
+                  return;
+                }
+
+                try {
+                  const response = await fetch("/api/admin/reset-all", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      confirm: "RESET_ALL_DATA",
+                    }),
+                  });
+
+                  if (response.ok) {
+                    const result = await response.json();
+                    toast.success(
+                      `✅ Reset complete! Deleted ${result.results.folders_deleted} workspaces and ${result.results.sows_before} SOWs`,
+                    );
+                    // Reload the page to show clean state
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 1500);
+                  } else {
+                    const error = await response.json();
+                    toast.error(`❌ Reset failed: ${error.error || "Unknown error"}`);
+                  }
+                } catch (error) {
+                  toast.error(`❌ Reset failed: ${error}`);
+                }
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
+              title="Reset all data - DANGEROUS!"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset All Data</span>
+            </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Confirmation Dialog - No "localhost:3001 says" */}
       <Dialog open={confirmDialog?.open || false} onOpenChange={(open) => {
