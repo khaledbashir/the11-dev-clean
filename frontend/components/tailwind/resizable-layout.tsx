@@ -102,9 +102,10 @@ export function ResizableLayout({
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT SIDEBAR - FIXED WIDTH OR 0 */}
         <div 
-          className={`h-full overflow-y-auto overflow-x-hidden flex-shrink-0 border-r border-gray-700 transition-all duration-300 ease-in-out ${
-            sidebarOpen ? 'w-96 md:w-80' : 'w-0 border-r-0'
+          className={`h-full overflow-y-auto overflow-x-visible flex-shrink-0 border-r border-gray-700 transition-all duration-300 ease-in-out ${
+            sidebarOpen ? 'w-[500px]' : 'w-0 border-r-0'
           }`}
+          style={sidebarOpen ? { minWidth: '500px' } : {}}
         >
           {sidebarOpen && leftPanel}
         </div>
