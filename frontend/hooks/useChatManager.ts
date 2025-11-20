@@ -34,7 +34,34 @@ function isFinalResponse(content: string): boolean {
         .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
         .trim();
 
-    // Check for intermediate/question indicators
+    // 🎯 PRIORITY 1: If it has the explicit marker, it's ALWAYS final (highest priority)
+    const hasMarker = content.includes("*** Insert into editor:");
+    if (hasMarker) {
+        console.log("✅ [Selective Insert] Explicit marker found - will auto-insert");
+        return true;
+    }
+
+    // Check for final response indicators (actual SOW content)
+    const finalIndicators = [
+        /```json[\s\S]*?```/,  // JSON code block
+        /"scope_name"/,         // SOW JSON structure
+        /"roles":\s*\[/,        // Roles array in JSON
+        /"financials":\s*\{/,    // Financials object in JSON
+        /investment_overview/i,  // Investment overview field
+        /deliverables.*\[/i,    // Deliverables array
+        /^\s*\{/,              // Starts with JSON object
+    ];
+
+    // Check if it has actual SOW content
+    const hasFinalIndicator = finalIndicators.some(pattern => pattern.test(cleanedContent));
+
+    // 🎯 PRIORITY 2: If it has SOW content (JSON, structure), it's final (even if it has some questions)
+    if (hasFinalIndicator) {
+        console.log("✅ [Selective Insert] SOW content detected - will auto-insert");
+        return true;
+    }
+
+    // 🎯 PRIORITY 3: If no SOW content, check for intermediate indicators to skip
     const intermediateIndicators = [
         /shall i proceed/i,
         /should i proceed/i,
@@ -62,45 +89,16 @@ function isFinalResponse(content: string): boolean {
         /please let me know/i,
     ];
 
-    // If response contains intermediate indicators, it's NOT final
+    // If response contains intermediate indicators AND no SOW content, it's NOT final
     for (const pattern of intermediateIndicators) {
         if (pattern.test(cleanedContent)) {
-            console.log("🔍 [Selective Insert] Detected intermediate response (contains question/confirmation)");
+            console.log("🔍 [Selective Insert] Detected intermediate response (question/confirmation without SOW content) - skipping");
             return false;
         }
     }
 
-    // Check for final response indicators (actual SOW content)
-    const finalIndicators = [
-        /```json[\s\S]*?```/,  // JSON code block
-        /"scope_name"/,         // SOW JSON structure
-        /"roles":\s*\[/,        // Roles array in JSON
-        /"financials":\s*\{/,    // Financials object in JSON
-        /investment_overview/i,  // Investment overview field
-        /deliverables.*\[/i,    // Deliverables array
-    ];
-
-    // Must have at least one final indicator to be considered final
-    const hasFinalIndicator = finalIndicators.some(pattern => pattern.test(cleanedContent));
-
-    if (!hasFinalIndicator) {
-        console.log("🔍 [Selective Insert] No final SOW content detected - skipping auto-insert");
-        return false;
-    }
-
-    // Final check: If it has the marker AND final content, it's ready
-    const hasMarker = content.includes("*** Insert into editor:");
-    if (hasMarker && hasFinalIndicator) {
-        console.log("✅ [Selective Insert] Final response detected - will auto-insert");
-        return true;
-    }
-
-    // If it has JSON but no marker, it might still be final (legacy support)
-    if (hasFinalIndicator && !hasMarker) {
-        console.log("✅ [Selective Insert] Final response detected (JSON without marker) - will auto-insert");
-        return true;
-    }
-
+    // Default: if we get here and no clear indicators, don't auto-insert
+    console.log("🔍 [Selective Insert] No clear SOW content or markers detected - skipping auto-insert");
     return false;
 }
 
@@ -490,21 +488,20 @@ export function useChatManager({
                      setChatMessages(prev => [...prev, aiMsg]);
                      
                      // 🎯 SELECTIVE AUTO-INSERTION: Only insert final responses
-                     const hasMarker = response.includes("*** Insert into editor:");
-                     const hasJSON = response.includes("```json");
                      const isFinal = isFinalResponse(response);
                      
-                     if ((hasMarker || hasJSON) && isFinal) {
-                         // reuse existing logic
+                     if (isFinal) {
+                         // Extract content after marker if present
                          let contentToInsert = response;
+                         const hasMarker = response.includes("*** Insert into editor:");
                          if (hasMarker) {
-                             contentToInsert = response.replace(/\*\*\* Insert into editor:\s*/, '');
+                             const parts = response.split("*** Insert into editor:");
+                             contentToInsert = parts.length > 1 ? parts[parts.length - 1] : response.replace(/\*\*\* Insert into editor:\s*/, '');
                          }
                          // Process content through conversion logic and insert
                          extractFinancialReasoning(contentToInsert);
-                         // For brevity, use handleInsertContent to insert content
                          await handleInsertContent(contentToInsert, []);
-                     } else if (hasMarker || hasJSON) {
+                     } else {
                          console.log("⏭️ [Selective Insert] Skipping auto-insert for intermediate response");
                      }
                      
@@ -680,16 +677,11 @@ export function useChatManager({
 
             // 🎯 SELECTIVE AUTO-INSERTION: Only insert final responses, skip intermediate confirmations
             // We do this AFTER the stream completes to ensure we have the full JSON/content
-            const hasMarker = fullResponseContent.includes("*** Insert into editor:");
-            const hasJSON = fullResponseContent.includes("```json");
-            const startsWithBrace = fullResponseContent.trim().startsWith("{");
-            
-            const isJsonBlock = hasJSON || startsWithBrace || hasMarker;
-            
             // Check if this is a final response (not an intermediate confirmation/question)
             const isFinal = isFinalResponse(fullResponseContent);
             
-            if (!isDashboardMode && isJsonBlock && isFinal) {
+            if (!isDashboardMode && isFinal) {
+                const hasMarker = fullResponseContent.includes("*** Insert into editor:");
                 let contentToInsert = fullResponseContent;
                 
                 if (hasMarker) {

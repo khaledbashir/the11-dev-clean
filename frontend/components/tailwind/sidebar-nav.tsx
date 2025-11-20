@@ -418,8 +418,8 @@ export default function SidebarNav({
             )}
           </button>
 
-          {/* Folder Name (truncated to 5 chars max) */}
-          <div className="flex-1 min-w-0 max-w-[80px]">
+          {/* Folder Name (truncated to 20 chars max for better readability) */}
+          <div className="flex-1 min-w-0 max-w-[180px]">
             {renamingId === folder.id ? (
               <Input
                 value={renameValue}
@@ -446,8 +446,8 @@ export default function SidebarNav({
                 }`}
                 title={folder.name}
               >
-                <span>{folder.name.length > 5 ? folder.name.substring(0, 5) + '...' : folder.name}</span>
-                <span className="ml-1 text-xs text-gray-500">({folderDocuments.length})</span>
+                <span className="truncate">{folder.name.length > 20 ? folder.name.substring(0, 20) + '...' : folder.name}</span>
+                <span className="ml-1 text-xs text-gray-500 flex-shrink-0">({folderDocuments.length})</span>
               </button>
             )}
           </div>
@@ -600,8 +600,8 @@ export default function SidebarNav({
           {/* Doc Icon */}
           <FileText className="w-4 h-4 flex-shrink-0" />
 
-          {/* Document Name - Clickable, max 5 chars with "..." */}
-          <div className="flex-1 min-w-0 max-w-[60px]">
+          {/* Document Name - Clickable, max 25 chars with "..." for better readability */}
+          <div className="flex-1 min-w-0 max-w-[200px]">
             {renamingId === document.id ? (
               <Input
                 value={renameValue}
@@ -622,10 +622,10 @@ export default function SidebarNav({
                     actualOnSelectDocument(document.id);
                   }
                 }}
-                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors"
+                className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors truncate"
                 title={document.title}
               >
-                {document.title.length > 5 ? document.title.substring(0, 5) + '...' : document.title}
+                {document.title.length > 25 ? document.title.substring(0, 25) + '...' : document.title}
               </button>
             )}
           </div>
@@ -671,19 +671,19 @@ export default function SidebarNav({
   }
 
   return (
-    <div className="w-80 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container">
-      {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner */}
+    <div className="w-80 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible">
+      {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner - ALWAYS VISIBLE */}
       {onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
-          className="absolute top-4 right-4 p-2.5 hover:bg-gray-800 rounded-lg transition-all duration-200 text-gray-400 hover:text-white z-10 shadow-md hover:shadow-lg active:scale-95 md:p-2 md:top-3 md:right-3"
+          className="absolute top-4 right-4 p-2.5 hover:bg-gray-800 rounded-lg transition-all duration-200 text-gray-400 hover:text-white z-50 shadow-md hover:shadow-lg active:scale-95 bg-gray-900/90 backdrop-blur-sm border border-gray-700"
           title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
           {sidebarOpen ? (
-            <Menu className="w-5 h-5 md:w-4 md:h-4" />
+            <ChevronLeft className="w-5 h-5" />
           ) : (
-            <ChevronRight className="w-5 h-5 md:w-4 md:h-4" />
+            <ChevronRight className="w-5 h-5" />
           )}
         </button>
       )}
