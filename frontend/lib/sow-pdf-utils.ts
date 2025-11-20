@@ -13,10 +13,19 @@ interface Section {
 
 const safeParse = (value: any): any | null => {
     if (!value) return null;
-    if (typeof value === "object") return value;
+    // If it's already an object with a type property (TipTap doc structure), return it
+    if (typeof value === "object" && (value.type === "doc" || value.content)) {
+        return value;
+    }
+    // If it's a plain object, return it as-is
+    if (typeof value === "object") {
+        return value;
+    }
+    // If it's a string, try to parse it
     if (typeof value === "string") {
         try {
-            return JSON.parse(value);
+            const parsed = JSON.parse(value);
+            return parsed;
         } catch (error) {
             console.warn(
                 "prepareSOWForNewPDF: failed to parse JSON content",
@@ -227,17 +236,61 @@ const extractDiscountPercentage = (nodes: any[]): number => {
  * Prepare SOW data from the current document for the new PDF export
  */
 export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
-    if (!currentDoc) return null;
+    if (!currentDoc) {
+        console.warn("prepareSOWForNewPDF: currentDoc is null or undefined");
+        return null;
+    }
 
     try {
+        // Try multiple sources for editor content
         const editorDoc =
             safeParse(currentDoc.content) ||
-            safeParse(currentDoc.latestEditorJSON);
+            safeParse(currentDoc.latestEditorJSON) ||
+            (currentDoc.content && typeof currentDoc.content === "object" ? currentDoc.content : null);
+        
+        console.log("📄 [prepareSOWForNewPDF] Editor doc structure:", {
+            hasEditorDoc: !!editorDoc,
+            hasContent: !!editorDoc?.content,
+            contentLength: editorDoc?.content?.length,
+            docType: editorDoc?.type,
+            currentDocKeys: Object.keys(currentDoc || {}),
+        });
+
         if (!editorDoc?.content) {
             console.warn(
                 "prepareSOWForNewPDF: no editor content found for document",
-                currentDoc?.id,
+                {
+                    docId: currentDoc?.id,
+                    hasContent: !!currentDoc.content,
+                    hasLatestEditorJSON: !!currentDoc.latestEditorJSON,
+                    contentType: typeof currentDoc.content,
+                    editorDocType: typeof editorDoc,
+                },
             );
+            // Return a minimal SOW structure instead of null to prevent empty PDF
+            return {
+                company: {
+                    name: "Social Garden",
+                },
+                clientName: currentDoc.clientName || currentDoc.client || "Client",
+                projectTitle: currentDoc.title || "Statement of Work",
+                projectSubtitle: "PROFESSIONAL SERVICES",
+                projectOverview: "Please add content to your SOW document.",
+                budgetNotes: "Payment terms: Net 30 days. Pricing subject to final scheduling and approvals.",
+                scopes: [
+                    {
+                        id: 1,
+                        title: "Project Scope",
+                        description: "Please add content to your SOW document.",
+                        items: [],
+                        deliverables: ["To be defined"],
+                        assumptions: [],
+                    },
+                ],
+                currency: (currentDoc.currency || "AUD").toString().toUpperCase(),
+                gstApplicable: (currentDoc.currency || "AUD").toString().toUpperCase() === "AUD",
+                generatedDate: new Date().toISOString(),
+            };
         }
 
         const nodes = editorDoc?.content || [];
@@ -293,8 +346,11 @@ export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
         const projectOverview = summariseParagraphs(overviewParagraphs, 3);
 
         const pricingRows = extractPricingFromContent(editorDoc);
+        console.log("💰 [prepareSOWForNewPDF] Pricing rows extracted:", pricingRows.length);
+        
         const scopeCount = Math.max(phaseSections.length, 1);
         const pricingBuckets = distributePricingRows(pricingRows, scopeCount);
+        console.log("📊 [prepareSOWForNewPDF] Scope count:", scopeCount, "Pricing buckets:", pricingBuckets.length);
 
         // 🎯 Extract discount percentage from pricing tables
         const discountPercentage = extractDiscountPercentage(nodes);
@@ -355,6 +411,8 @@ export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
                       cost: 0,
                   },
               ];
+        
+        console.log("📋 [prepareSOWForNewPDF] Default scope items:", defaultScopeItems.length);
 
         let scopes: SOWScope[] = [];
 
@@ -364,7 +422,9 @@ export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
                 const description =
                     summariseParagraphs(paragraphs, 4) || section.title;
                 const sectionDeliverables = collectListItems(section.nodes);
-                const items = pricingBuckets[index]?.length
+                
+                // Ensure items array is never empty
+                let items = pricingBuckets[index]?.length
                     ? pricingBuckets[index].map(rowToItem)
                     : index === 0
                       ? defaultScopeItems
@@ -377,6 +437,16 @@ export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
                                 cost: 0,
                             },
                         ];
+                
+                // If items is still empty, add a placeholder
+                if (!items || items.length === 0) {
+                    items = [{
+                        description: "Professional services delivery as outlined in the SOW",
+                        role: "Project Team",
+                        hours: 0,
+                        cost: 0,
+                    }];
+                }
 
                 const assumptions = section.title
                     ?.toLowerCase()
@@ -384,20 +454,40 @@ export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
                     ? collectListItems(section.nodes)
                     : [];
 
-                return {
+                const scope: SOWScope = {
                     id: index + 1,
                     title: section.title || `Scope ${index + 1}`,
-                    description,
+                    description: description || "Project scope details",
                     items,
                     deliverables: sectionDeliverables.length
                         ? sectionDeliverables
-                        : mergeUnique(globalDeliverables),
+                        : mergeUnique(globalDeliverables).length > 0
+                          ? mergeUnique(globalDeliverables)
+                          : ["To be defined"],
                     assumptions: assumptions.length
                         ? assumptions
                         : mergeUnique(globalAssumptions),
-                } as SOWScope;
+                };
+                
+                console.log(`📦 [prepareSOWForNewPDF] Scope ${scope.id}:`, {
+                    title: scope.title,
+                    itemsCount: scope.items.length,
+                    deliverablesCount: scope.deliverables.length,
+                });
+                
+                return scope;
             });
         } else {
+            // Ensure default scope has at least one item
+            const defaultItems = defaultScopeItems.length > 0 
+                ? defaultScopeItems 
+                : [{
+                    description: "Professional services delivery as outlined in the SOW",
+                    role: "Project Team",
+                    hours: 0,
+                    cost: 0,
+                }];
+            
             scopes = [
                 {
                     id: 1,
@@ -405,8 +495,37 @@ export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
                     description:
                         projectOverview ||
                         "Comprehensive project delivery as outlined in the SOW.",
-                    items: defaultScopeItems,
-                    deliverables: mergeUnique(globalDeliverables),
+                    items: defaultItems,
+                    deliverables: mergeUnique(globalDeliverables).length > 0
+                        ? mergeUnique(globalDeliverables)
+                        : ["To be defined"],
+                    assumptions: mergeUnique(globalAssumptions),
+                },
+            ];
+            
+            console.log("📦 [prepareSOWForNewPDF] Created default scope:", {
+                itemsCount: scopes[0].items.length,
+                deliverablesCount: scopes[0].deliverables.length,
+            });
+        }
+
+        // Ensure scopes array is never empty
+        if (!scopes || scopes.length === 0) {
+            console.warn("⚠️ [prepareSOWForNewPDF] Scopes array is empty, creating default scope");
+            scopes = [
+                {
+                    id: 1,
+                    title: currentDoc.title || "Project Scope",
+                    description: projectOverview || "Comprehensive project delivery as outlined in the SOW.",
+                    items: defaultScopeItems.length > 0 ? defaultScopeItems : [{
+                        description: "Professional services delivery as outlined in the SOW",
+                        role: "Project Team",
+                        hours: 0,
+                        cost: 0,
+                    }],
+                    deliverables: mergeUnique(globalDeliverables).length > 0
+                        ? mergeUnique(globalDeliverables)
+                        : ["To be defined"],
                     assumptions: mergeUnique(globalAssumptions),
                 },
             ];
@@ -431,6 +550,14 @@ export function prepareSOWForNewPDF(currentDoc: any): SOWData | null {
             generatedDate: new Date().toISOString(),
             discount: discountPercentage > 0 ? discountPercentage : undefined,
         };
+
+        console.log("✅ [prepareSOWForNewPDF] Final SOW data:", {
+            clientName: sowData.clientName,
+            projectTitle: sowData.projectTitle,
+            scopesCount: sowData.scopes.length,
+            totalItems: sowData.scopes.reduce((sum, s) => sum + s.items.length, 0),
+            totalDeliverables: sowData.scopes.reduce((sum, s) => sum + s.deliverables.length, 0),
+        });
 
         return sowData;
     } catch (error) {

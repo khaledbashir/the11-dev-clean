@@ -2103,18 +2103,40 @@ export default function Page() {
                     "📄 [PDF Export] Using standard HTML conversion (no multi-scope data)",
                 );
 
-                // Fallback to standard PDF export
-                const sowData = prepareSOWForNewPDF({
+                // Prepare document data for PDF export
+                // Ensure editorJSON is properly structured
+                const docForPDF: any = {
                     ...currentDoc,
-                    content: editorJSON,
+                    content: editorJSON || currentDoc.content,
+                    latestEditorJSON: editorJSON || (currentDoc as any).latestEditorJSON || currentDoc.content,
+                };
+                
+                console.log("📝 [PDF Export] Document data for PDF:", {
+                    hasContent: !!docForPDF.content,
+                    hasLatestEditorJSON: !!docForPDF.latestEditorJSON,
+                    contentType: typeof docForPDF.content,
+                    contentTypeValue: docForPDF.content?.type,
+                    docId: docForPDF.id,
+                    docTitle: docForPDF.title,
                 });
 
+                // Fallback to standard PDF export
+                const sowData = prepareSOWForNewPDF(docForPDF);
+
                 if (!sowData) {
+                    console.error("❌ [PDF Export] prepareSOWForNewPDF returned null");
                     toast.error(
-                        "❌ Unable to generate PDF from current document",
+                        "❌ Unable to generate PDF from current document. Please ensure your document has content.",
                     );
                     return;
                 }
+
+                console.log("✅ [PDF Export] SOW data prepared:", {
+                    scopesCount: sowData.scopes.length,
+                    totalItems: sowData.scopes.reduce((sum, s) => sum + s.items.length, 0),
+                    hasProjectTitle: !!sowData.projectTitle,
+                    hasClientName: !!sowData.clientName,
+                });
 
                 setNewPDFData(sowData);
                 setShowNewPDFModal(true);

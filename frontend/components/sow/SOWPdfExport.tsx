@@ -508,24 +508,31 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
                   </View>
 
                   {/* Table Rows */}
-                  {(scope.items || []).map((item, itemIndex) => {
+                  {((scope.items || []).length > 0 ? scope.items : [
+                    {
+                      description: "Professional services delivery as outlined in the SOW",
+                      role: "Project Team",
+                      hours: 0,
+                      cost: 0,
+                    }
+                  ]).map((item, itemIndex) => {
                     const itemDescription = sanitizeWeekText(item.description);
                     const itemRole = sanitizeWeekText(item.role);
                     const rowStyle = itemIndex % 2 === 1 ? styles.tableRowAlt : styles.tableRow;
                     return (
                       <View key={itemIndex} style={rowStyle}>
                         <View style={styles.colItems}>
-                          <Text style={styles.tableCellText}>{itemDescription || item.description}</Text>
+                          <Text style={styles.tableCellText}>{itemDescription || item.description || "Professional services"}</Text>
                         </View>
                         <View style={styles.colRole}>
-                          <Text style={styles.tableCellTextMuted}>{itemRole || item.role}</Text>
+                          <Text style={styles.tableCellTextMuted}>{itemRole || item.role || "Project Team"}</Text>
                         </View>
                         <View style={styles.colHours}>
-                          <Text style={styles.tableCellText}>{item.hours}</Text>
+                          <Text style={styles.tableCellText}>{item.hours || 0}</Text>
                         </View>
                         <View style={styles.colCost}>
                           <Text style={styles.tableCellTextBold}>
-                            {formatCurrency(item.cost, currency)}
+                            {formatCurrency(item.cost || 0, currency)}
                           </Text>
                         </View>
                       </View>
