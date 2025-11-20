@@ -244,8 +244,22 @@ export function useChatManager({
 
         try {
             let filteredContent = trimmedContent;
-            filteredContent = filteredContent.replace(/<thinking>([\s\S]*?)<\/thinking>/gi, "");
-            filteredContent = filteredContent.replace(/<think>([\s\S]*?)<\/think>/gi, "");
+            // 🎯 FIX: Comprehensive thinking tag removal (all variants)
+            filteredContent = filteredContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
+            filteredContent = filteredContent.replace(/<think>[\s\S]*?<\/think>/gi, "");
+            filteredContent = filteredContent.replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, "");
+            filteredContent = filteredContent.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
+            
+            // Clean up orphan closing tags
+            if (filteredContent.includes("</think>") && !filteredContent.includes("<think>")) {
+                filteredContent = filteredContent.replace(/^[\s\S]*?<\/think>/i, "").trim();
+            }
+            if (filteredContent.includes("</thinking>") && !filteredContent.includes("<thinking>")) {
+                filteredContent = filteredContent.replace(/^[\s\S]*?<\/thinking>/i, "").trim();
+            }
+            
+            // Final pass: Remove any remaining XML-style tags
+            filteredContent = filteredContent.replace(/<\/?[A-Z_]+>/gi, "");
 
             // Complex content conversion logic with proper TipTap JSON structure
             let convertedContent: any;
@@ -598,18 +612,28 @@ export function useChatManager({
                 // Strip thinking tags before inserting into Editor
                 let filteredContent = contentToInsert;
                 
-                // 🎯 FIX: Enhanced cleaning for thinking blocks (orphaned tags)
+                // 🎯 FIX: Enhanced cleaning for thinking blocks (all variants)
+                // Remove all thinking tag variants (order matters - most specific first)
                 filteredContent = filteredContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
                 filteredContent = filteredContent.replace(/<think>[\s\S]*?<\/think>/gi, "");
                 filteredContent = filteredContent.replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, "");
+                filteredContent = filteredContent.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
                 
                 // Clean up orphan closing tags (assumes thinking is at start)
+                // Handle cases where opening tag was missing or malformed
                 if (filteredContent.includes("</think>") && !filteredContent.includes("<think>")) {
+                    // Remove everything from start until the closing tag
                     filteredContent = filteredContent.replace(/^[\s\S]*?<\/think>/i, "").trim();
                 }
                 if (filteredContent.includes("</thinking>") && !filteredContent.includes("<thinking>")) {
                     filteredContent = filteredContent.replace(/^[\s\S]*?<\/thinking>/i, "").trim();
                 }
+                if (filteredContent.includes("</think>") && !filteredContent.includes("<think>")) {
+                    filteredContent = filteredContent.replace(/^[\s\S]*?<\/redacted_reasoning>/i, "").trim();
+                }
+                
+                // Final pass: Remove any remaining XML-style tags that might be internal
+                filteredContent = filteredContent.replace(/<\/?[A-Z_]+>/gi, "");
                 
                 // Convert to TipTap JSON structure
                 let convertedContent: any;
