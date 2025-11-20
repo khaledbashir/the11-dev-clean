@@ -998,6 +998,12 @@ export default function Page() {
             );
             const workspace =
                 await anythingLLM.createWorkspaceWithPrompt(workspaceName);
+            
+            // 🛡️ GUARD: Ensure workspace has a slug before proceeding
+            if (!workspace?.slug) {
+                throw new Error("Failed to create workspace: Missing workspace slug");
+            }
+            
             const embedId = await anythingLLM.getOrCreateEmbedId(
                 workspace.slug,
             );

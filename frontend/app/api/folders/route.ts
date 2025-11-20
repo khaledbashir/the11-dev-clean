@@ -43,7 +43,12 @@ export async function POST(request: NextRequest) {
 
         // 🛑 VALIDATION: workspaceSlug is mandatory
         if (!workspaceSlug) {
-             console.error("❌ Missing workspaceSlug in create folder request");
+             // Silent validation - don't spam logs for expected cases (e.g., initial load checks)
+             // Only log if this appears to be an actual user-initiated action
+             const isUserAction = name && name.trim().length > 0;
+             if (isUserAction) {
+                 console.error("❌ Missing workspaceSlug in create folder request for:", name);
+             }
              return NextResponse.json(
                 { error: "workspaceSlug is required" },
                 { status: 400 }
