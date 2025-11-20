@@ -1448,24 +1448,42 @@ You have access to the full SOW document that has been embedded in this workspac
                     ? process.env.NEXT_PUBLIC_OPENROUTER_MODEL_PREF
                     : model;
 
-            // Get API key - ensure we always have a valid key
-            // Check instance property first (from constructor), then fall back to env vars
-            let apiKey = this.apiKey;
+            // Get API key - always check environment variable first to ensure fresh value
+            // This fixes timing issues where the instance key might be stale or invalid
+            let apiKey: string | undefined;
             
-            // If instance key is missing or undefined, try env vars (client-side accessible)
-            if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-                if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY) {
-                    apiKey = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
-                    // Update instance for next call
-                    this.apiKey = apiKey;
-                } else if (typeof process !== 'undefined' && process.env.ANYTHINGLLM_API_KEY) {
-                    // Server-side only fallback (won't work in browser but good for SSR)
-                    apiKey = process.env.ANYTHINGLLM_API_KEY;
-                    this.apiKey = apiKey;
+            // Priority 1: Check client-side accessible env var (always available in browser)
+            if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY) {
+                const envKey = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
+                // Validate it's not a placeholder string
+                if (envKey && envKey !== 'undefined' && envKey.trim() !== '') {
+                    apiKey = envKey;
                 }
             }
+            
+            // Priority 2: Check server-side env var (for SSR)
+            if ((!apiKey || apiKey === 'undefined' || apiKey === '') && typeof process !== 'undefined' && process.env.ANYTHINGLLM_API_KEY) {
+                const envKey = process.env.ANYTHINGLLM_API_KEY;
+                if (envKey && envKey !== 'undefined' && envKey.trim() !== '') {
+                    apiKey = envKey;
+                }
+            }
+            
+            // Priority 3: Fall back to instance key (from constructor)
+            if ((!apiKey || apiKey === 'undefined' || apiKey === '') && this.apiKey) {
+                const instanceKey = this.apiKey;
+                if (instanceKey && instanceKey !== 'undefined' && instanceKey.trim() !== '') {
+                    apiKey = instanceKey;
+                }
+            }
+            
+            // Update instance key if we got a valid one from env
+            if (apiKey && apiKey !== this.apiKey) {
+                this.apiKey = apiKey;
+            }
 
-            if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+            // Final validation
+            if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
                 console.error(`❌ Missing API key for OpenAI endpoint. Check NEXT_PUBLIC_ANYTHINGLLM_API_KEY environment variable.`);
                 return null;
             }
@@ -1474,19 +1492,51 @@ You have access to the full SOW document that has been embedded in this workspac
             console.log(`   Model: ${preferredModel}`);
             console.log(`   API Key: ${apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING'}`);
             
-            const response = await fetch(endpoint, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                    model: preferredModel,
-                    messages,
-                    temperature,
-                    stream: false, // Explicitly request non-streaming response
-                }),
-            });
+            // Helper function to make the API call
+            const makeRequest = async (keyToUse: string): Promise<Response> => {
+                return await fetch(endpoint, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${keyToUse}`,
+                    },
+                    body: JSON.stringify({
+                        model: preferredModel,
+                        messages,
+                        temperature,
+                        stream: false, // Explicitly request non-streaming response
+                    }),
+                });
+            };
+
+            let response = await makeRequest(apiKey);
+
+            // If we get a 401, retry once with a fresh API key check
+            if (response.status === 401) {
+                console.warn(`🔑 [401 Error] Retrying with fresh API key...`);
+                console.error(`🔑 [401 Error] API Key status:`, {
+                    hasApiKey: !!apiKey,
+                    apiKeyPrefix: apiKey ? apiKey.substring(0, 8) : 'N/A',
+                    apiKeyLength: apiKey ? apiKey.length : 0,
+                });
+                
+                // Force refresh API key from environment
+                let freshApiKey: string | undefined;
+                if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY) {
+                    const envKey = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
+                    if (envKey && envKey !== 'undefined' && envKey.trim() !== '') {
+                        freshApiKey = envKey;
+                    }
+                }
+                
+                if (freshApiKey && freshApiKey !== apiKey) {
+                    console.log(`🔄 Using fresh API key (prefix: ${freshApiKey.substring(0, 8)}...)`);
+                    this.apiKey = freshApiKey;
+                    apiKey = freshApiKey;
+                    // Retry the request with fresh key
+                    response = await makeRequest(freshApiKey);
+                }
+            }
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -1494,7 +1544,7 @@ You have access to the full SOW document that has been embedded in this workspac
                 
                 // Log detailed error for 401 to help debug
                 if (response.status === 401) {
-                    console.error(`🔑 [401 Error] API Key status:`, {
+                    console.error(`🔑 [401 Error] API Key status after retry:`, {
                         hasApiKey: !!apiKey,
                         apiKeyPrefix: apiKey ? apiKey.substring(0, 8) : 'N/A',
                         apiKeyLength: apiKey ? apiKey.length : 0,
