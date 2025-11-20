@@ -67,7 +67,7 @@ export function DocumentStatusBar({
     const IconComponent = config.icon;
 
     return (
-        <div className="h-14 bg-[#0E0F0F] border-b border-[#2A2A2D] flex items-center justify-between px-3 sm:px-6 flex-shrink-0">
+        <div className="w-full h-14 bg-[#0E0F0F] border-b border-[#2A2A2D] flex items-center justify-between px-3 sm:px-6 flex-shrink-0">
             {/* Title */}
             <div className="flex-1 min-w-0 mr-4 overflow-hidden">
                 <h2 className="text-base sm:text-lg font-semibold text-white truncate">
