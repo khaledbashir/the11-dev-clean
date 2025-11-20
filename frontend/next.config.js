@@ -14,9 +14,10 @@ const nextConfig = {
     ignoreDuringBuilds: true, // Skip ESLint during build
   },
   
-  // Force Node.js runtime instead of edge to prevent CSS/layout issues
+  // Environment-based runtime: edge in production, nodejs in development
+  // This gives best performance in prod while maintaining dev consistency
   experimental: {
-    runtime: 'nodejs',
+    runtime: process.env.NODE_ENV === 'production' ? 'edge' : 'nodejs',
   },
   
   // Enable SWC minification (faster than Terser)
