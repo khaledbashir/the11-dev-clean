@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
     
     // Get authorization URL from backend
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/oauth/authorize`,
+      `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_PDF_SERVICE_URL || 'https://ahmad-socialgarden-backend.840tjq.easypanel.host'}/oauth/authorize`,
       {
         method: 'GET',
         headers: {

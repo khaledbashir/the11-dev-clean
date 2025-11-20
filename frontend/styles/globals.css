@@ -95,9 +95,22 @@
     @apply border-border;
   }
   
+  html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Prevent body scroll, let components handle their own scrolling */
+  }
+  
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  #__next {
+    height: 100%;
+    width: 100%;
   }
   
   h1, h2, h3, h4, h5, h6 {

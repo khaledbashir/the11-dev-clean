@@ -376,7 +376,9 @@ export class AnythingLLMService {
                 typeof window !== "undefined"
                     ? window.location.origin
                     : process.env.NEXT_PUBLIC_APP_URL ||
-                      "http://localhost:3000";
+                      process.env.NEXT_PUBLIC_BASE_URL ||
+                      process.env.NEXT_PUBLIC_API_URL ||
+                      "https://sow.qandu.me";
 
             const response = await fetch(`${baseUrl}/api/rate-card/markdown`);
             const result = await response.json();

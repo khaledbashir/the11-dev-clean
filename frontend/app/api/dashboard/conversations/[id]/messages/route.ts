@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 
-const ANYTHINGLLM_URL = process.env.NEXT_PUBLIC_ANYTHINGLLM_URL || 'http://localhost:3001';
+const ANYTHINGLLM_URL = process.env.NEXT_PUBLIC_ANYTHINGLLM_URL || process.env.ANYTHINGLLM_URL || 'https://ahmad-anything-llm.840tjq.easypanel.host';
 const ANYTHINGLLM_API_KEY = process.env.ANYTHINGLLM_API_KEY || '';
 const DASHBOARD_WORKSPACE = 'sow-master-dashboard';
 

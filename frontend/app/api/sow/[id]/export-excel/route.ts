@@ -92,7 +92,7 @@ export async function GET(
 
         // Call backend service to generate Excel
         const PDF_SERVICE_URL =
-            process.env.NEXT_PUBLIC_PDF_SERVICE_URL || "http://localhost:8000";
+            process.env.NEXT_PUBLIC_PDF_SERVICE_URL || "https://ahmad-socialgarden-backend.840tjq.easypanel.host";
 
         const response = await fetch(`${PDF_SERVICE_URL}/export-excel`, {
             method: "POST",

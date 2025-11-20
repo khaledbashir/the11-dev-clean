@@ -58,7 +58,7 @@ export async function POST(
       [workspace.slug, embedId, formatDateForMySQL(new Date()), sowId]
     );
 
-    const portalUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000'}/portal/sow/${sowId}`;
+    const portalUrl = `${process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'https://sow.qandu.me'}/portal/sow/${sowId}`;
 
     return NextResponse.json({
       success: true,

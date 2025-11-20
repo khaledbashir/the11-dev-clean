@@ -61,7 +61,7 @@ export async function POST(
 
         // Call backend service to generate PDF
         const PDF_SERVICE_URL =
-            process.env.NEXT_PUBLIC_PDF_SERVICE_URL || "http://localhost:8000";
+            process.env.NEXT_PUBLIC_PDF_SERVICE_URL || "https://ahmad-socialgarden-backend.840tjq.easypanel.host";
 
         // Get HTML content from frontend if elementId is provided
         let htmlContent = "";

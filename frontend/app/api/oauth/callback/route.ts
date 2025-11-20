@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Exchange code for token via backend
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_PDF_SERVICE_URL || 'https://ahmad-socialgarden-backend.840tjq.easypanel.host';
     const response = await fetch(`${backendUrl}/oauth/token`, {
       method: 'POST',
       headers: {
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     console.log('🔍 OAuth callback - state:', state);
 
     // Exchange code for token via backend
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_PDF_SERVICE_URL || 'https://ahmad-socialgarden-backend.840tjq.easypanel.host';
     const response = await fetch(`${backendUrl}/oauth/token`, {
       method: 'POST',
       headers: {
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const error = await response.json();
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001';
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'https://sow.qandu.me';
       console.error('❌ OAuth token exchange failed:', error);
       return NextResponse.redirect(
         new URL(`/?oauth_error=${encodeURIComponent(error.error || 'OAuth failed')}`, baseUrl)
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
     console.log('✅ OAuth token received, redirecting to:', returnUrl);
 
     // Redirect back to original page with token in URL
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'https://sow.qandu.me';
     
     // Ensure returnUrl is relative (strip any full URL if present)
     let cleanReturnUrl = returnUrl;
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('OAuth callback error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001';
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_API_URL || 'https://sow.qandu.me';
     return NextResponse.redirect(
       new URL(`/?oauth_error=${encodeURIComponent(errorMessage)}`, baseUrl)
     );

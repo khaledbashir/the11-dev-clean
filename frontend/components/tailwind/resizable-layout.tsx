@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { ChevronLeft, ChevronRight, Menu, Sparkles } from "lucide-react";
+import { Menu, Sparkles } from "lucide-react";
 
 interface ResizableLayoutProps {
   leftPanel: React.ReactNode;
@@ -38,15 +38,10 @@ export function ResizableLayout({
   onToggleAiChat,
   viewMode = 'editor', // Default to editor mode
 }: ResizableLayoutProps) {
-  const [mounted, setMounted] = useState(false);
   const [chatWidth, setChatWidth] = useState(384); // w-96 = 384px
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(0);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -75,12 +70,10 @@ export function ResizableLayout({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
-
-  if (!mounted) return null;
+  }, [isResizing, chatWidth]);
 
   return (
-    <div className="h-screen w-screen flex flex-col relative">
+    <div className="h-screen w-screen flex flex-col relative" suppressHydrationWarning>
       {/* PERSISTENT LEFT SIDEBAR TOGGLE TAB - ALWAYS VISIBLE */}
       {!sidebarOpen && onToggleSidebar && (
         <button

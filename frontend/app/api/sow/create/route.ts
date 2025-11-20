@@ -240,7 +240,7 @@ export async function POST(req: NextRequest) {
 
         // 🔒 Invisible background snapshot (best-effort)
         try {
-            const host = req.headers.get("host") || "localhost:3333";
+            const host = req.headers.get("host") || process.env.NEXT_PUBLIC_BASE_URL?.replace(/^https?:\/\//, '') || "sow.qandu.me";
             const proto =
                 req.headers.get("x-forwarded-proto") ||
                 (host.includes("localhost") ? "http" : "https");
