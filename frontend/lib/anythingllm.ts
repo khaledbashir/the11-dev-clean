@@ -3,6 +3,7 @@
 
 import SOCIAL_GARDEN_KNOWLEDGE_BASE from "./social-garden-knowledge-base";
 import { ARCHITECT_SYSTEM_PROMPT } from "./system-prompt";
+import { debug, error, warn } from "./logger";
 
 
 // Get AnythingLLM URL from environment (NEXT_PUBLIC_ANYTHINGLLM_URL must be set in .env)
@@ -18,7 +19,7 @@ const ANYTHINGLLM_API_KEY = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
 // Security validation: Ensure API key is set (but don't throw error during module load)
 // We'll validate at runtime when making API calls instead
 if (!ANYTHINGLLM_API_KEY) {
-    console.warn(
+    warn(
         "Warning: NEXT_PUBLIC_ANYTHINGLLM_API_KEY environment variable is not set. API calls will fail at runtime.",
     );
 }
@@ -105,7 +106,7 @@ export class AnythingLLMService {
             const existing = workspaces.find((w: any) => w.slug === slug);
 
             if (existing) {
-                console.log(`✅ Using existing client workspace: ${slug}`);
+                debug(`✅ Using existing client workspace: ${slug}`);
                 // Ensure client-facing prompt is set
                 await this.setWorkspacePrompt(existing.slug, clientName, false); // false = client-facing
                 // Get embed ID
@@ -114,7 +115,7 @@ export class AnythingLLMService {
             }
 
             // Create new client-facing workspace
-            console.log(`🆕 Creating new client-facing workspace: ${slug}`);
+            debug(`🆕 Creating new client-facing workspace: ${slug}`);
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/new`,
                 {
@@ -134,7 +135,7 @@ export class AnythingLLMService {
             }
 
             const data: WorkspaceResponse = await response.json();
-            console.log(`✅ Client workspace created: ${data.workspace.slug}`);
+            debug(`✅ Client workspace created: ${data.workspace.slug}`);
 
             // Set client-facing prompt (NOT the Architect prompt)
             await this.setWorkspacePrompt(
@@ -155,7 +156,7 @@ export class AnythingLLMService {
                 embedId,
             };
         } catch (error) {
-            console.error("❌ Error creating client workspace:", error);
+            error("❌ Error creating client workspace:", error);
             throw error;
         }
     }
@@ -179,10 +180,10 @@ export class AnythingLLMService {
                 workspaces.find((w: any) => w.name === masterName);
 
             if (existing) {
-                console.log(
+                debug(
                     `✅ Using existing master SOW generation workspace: ${existing.slug}`,
                 );
-                console.log(`   (Client context: ${clientName})`);
+                debug(`   (Client context: ${clientName})`);
                 // 🚀 OPTIMIZATION: Skip prompt and rate card setup for existing workspace
                 // Trust the existing workspace configuration - it already has the correct prompt
                 // This prevents overwriting user-customized workspace prompts
@@ -190,7 +191,7 @@ export class AnythingLLMService {
             }
 
             // Create master workspace with specific name
-            console.log(`🆕 Creating master SOW generation workspace`);
+            debug(`🆕 Creating master SOW generation workspace`);
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/new`,
                 {
@@ -211,7 +212,7 @@ export class AnythingLLMService {
             }
 
             const data: WorkspaceResponse = await response.json();
-            console.log(
+            debug(
                 `✅ Master SOW generation workspace created: ${data.workspace.slug}`,
             );
 
@@ -233,13 +234,13 @@ export class AnythingLLMService {
             }
 
             // Create a default thread for general use
-            console.log(`🧵 Creating default thread for master workspace...`);
+            debug(`🧵 Creating default thread for master workspace...`);
             await this.createThread(data.workspace.slug, undefined);
-            console.log(`✅ Default thread created in master workspace`);
+            debug(`✅ Default thread created in master workspace`);
 
             return { id: data.workspace.id, slug: data.workspace.slug };
         } catch (error) {
-            console.error("❌ Error with master SOW workspace:", error);
+            error("❌ Error with master SOW workspace:", error);
             throw error;
         }
     }
@@ -264,7 +265,7 @@ export class AnythingLLMService {
             const existing = workspaces.find((w: any) => w.slug === slug);
 
             if (existing) {
-                console.log(
+                debug(
                     `✅ Using existing workspace: ${existing.slug} (${workspaceName})`,
                 );
                 // Ensure prompt is set (idempotent)
@@ -273,7 +274,7 @@ export class AnythingLLMService {
             }
 
             // Create new workspace
-            console.log(`🆕 Creating new workspace: ${workspaceName} (${slug})`);
+            debug(`🆕 Creating new workspace: ${workspaceName} (${slug})`);
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/new`,
                 {
@@ -294,7 +295,7 @@ export class AnythingLLMService {
             }
 
             const data: WorkspaceResponse = await response.json();
-            console.log(
+            debug(
                 `✅ Workspace created: ${data.workspace.slug} (${data.workspace.name})`,
             );
 
@@ -306,7 +307,7 @@ export class AnythingLLMService {
 
             return { id: data.workspace.id, slug: data.workspace.slug };
         } catch (error) {
-            console.error("❌ Error creating workspace with prompt:", error);
+            error("❌ Error creating workspace with prompt:", error);
             throw error;
         }
     }
@@ -318,7 +319,7 @@ export class AnythingLLMService {
      */
     async setArchitectPrompt(workspaceSlug: string): Promise<boolean> {
         try {
-            console.log(
+            debug(
                 `⚙️ Setting Architect system prompt for workspace: ${workspaceSlug}`,
             );
             
@@ -345,19 +346,19 @@ export class AnythingLLMService {
 
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
-                console.error(
+                error(
                     `❌ Failed to set Architect prompt/config (${response.status}):`,
                     error,
                 );
                 return false;
             }
 
-            console.log(
+            debug(
                 `✅ Architect system prompt & config mirrored for workspace: ${workspaceSlug}`,
             );
             return true;
         } catch (error) {
-            console.error("❌ Error setting Architect prompt:", error);
+            error("❌ Error setting Architect prompt:", error);
             return false;
         }
     }
@@ -384,12 +385,12 @@ export class AnythingLLMService {
             const result = await response.json();
 
             if (result.success) {
-                console.log(
+                debug(
                     `✅ Fetched rate card markdown (${result.roleCount} roles, v${result.version})`,
                 );
                 return result.markdown;
             } else {
-                console.error(
+                error(
                     "❌ Failed to fetch rate card markdown:",
                     result.error,
                 );
@@ -397,7 +398,7 @@ export class AnythingLLMService {
                 return `# Social Garden - Official Rate Card\n\nError: Unable to fetch rate card data. Please contact support.`;
             }
         } catch (error) {
-            console.error("❌ Error fetching rate card markdown:", error);
+            error("❌ Error fetching rate card markdown:", error);
             return `# Social Garden - Official Rate Card\n\nError: Unable to fetch rate card data. Please contact support.`;
         }
     }
@@ -460,7 +461,7 @@ export class AnythingLLMService {
             const alreadyHasRateCard =
                 await this.rateCardAlreadyEmbedded(workspaceSlug);
             if (alreadyHasRateCard) {
-                console.log(
+                debug(
                     `✅ Rate card already present in workspace: ${workspaceSlug} (skipping embed)`,
                 );
                 return true;
@@ -527,10 +528,10 @@ export class AnythingLLMService {
                 );
             }
 
-            console.log(`✅ Rate card embedded in workspace: ${workspaceSlug}`);
+            debug(`✅ Rate card embedded in workspace: ${workspaceSlug}`);
             return true;
         } catch (error) {
-            console.error("❌ Error embedding rate card:", error);
+            error("❌ Error embedding rate card:", error);
             return false;
         }
     }
@@ -557,7 +558,7 @@ export class AnythingLLMService {
             const data = await response.json();
             return data.workspaces || [];
         } catch (error) {
-            console.error("❌ Error listing workspaces:", error);
+            error("❌ Error listing workspaces:", error);
             return [];
         }
     }
@@ -607,18 +608,18 @@ export class AnythingLLMService {
             // 🛡️ GUARD CLAUSE: Prevent 400 Error on Empty SOW Embedding
             // Check content length before attempting upload to prevent AnythingLLM from rejecting empty documents
             if (!htmlContent || htmlContent.trim().length < 20) {
-                console.log(`⚠️ [GUARD] SOW Content too short to embed (${htmlContent?.length || 0} chars). Skipping RAG embedding. (New SOW - will embed when content is generated)`);
+                debug(`⚠️ [GUARD] SOW Content too short to embed (${htmlContent?.length || 0} chars). Skipping RAG embedding. (New SOW - will embed when content is generated)`);
                 return true; // Exit silently, do not crash the app
             }
 
             // Additional check: Remove HTML tags and verify actual text content exists
             const textOnly = htmlContent.replace(/<[^>]*>/g, '').trim();
             if (textOnly.length < 20) {
-                console.log(`⚠️ [GUARD] SOW Content has insufficient text after HTML tag removal (${textOnly.length} chars). Skipping RAG embedding.`);
+                debug(`⚠️ [GUARD] SOW Content has insufficient text after HTML tag removal (${textOnly.length} chars). Skipping RAG embedding.`);
                 return true; // Exit silently, do not crash the app
             }
 
-            console.log(
+            debug(
                 `📄 Embedding SOW: ${sowTitle} to workspace: ${workspaceSlug}`,
             );
 
@@ -640,7 +641,7 @@ Metadata:
       `.trim();
 
             // Step 1: Process raw text as document using AnythingLLM API
-            console.log(`📄 [STEP 7.2.1] Processing raw text document: ${sowTitle}`);
+            debug(`📄 [STEP 7.2.1] Processing raw text document: ${sowTitle}`);
             const rawTextResponse = await fetch(
                 `${this.baseUrl}/api/v1/document/raw-text`,
                 {
@@ -662,7 +663,7 @@ Metadata:
 
             if (!rawTextResponse.ok) {
                 const errorText = await rawTextResponse.text();
-                console.error(`❌ [STEP 7.2.1] FAILED: Document processing returned ${rawTextResponse.status}`);
+                error(`❌ [STEP 7.2.1] FAILED: Document processing returned ${rawTextResponse.status}`);
                 throw new Error(
                     `Failed to process document: ${rawTextResponse.status} ${errorText}`,
                 );
@@ -671,7 +672,7 @@ Metadata:
             const rawTextData = await rawTextResponse.json();
 
             if (!rawTextData.success || !rawTextData.documents?.[0]?.location) {
-                console.error(`❌ [STEP 7.2.1] FAILED: Document processing - no location returned`);
+                error(`❌ [STEP 7.2.1] FAILED: Document processing - no location returned`);
                 throw new Error(
                     rawTextData.error ||
                         "Document processing failed - no location returned",
@@ -682,28 +683,28 @@ Metadata:
             
             // Validate document location format
             if (!documentLocation || typeof documentLocation !== 'string') {
-                console.error(`❌ [STEP 7.2.1] FAILED: Invalid document location format`);
+                error(`❌ [STEP 7.2.1] FAILED: Invalid document location format`);
                 throw new Error(
                     `Invalid document location format: ${JSON.stringify(documentLocation)}`,
                 );
             }
 
-            console.log(`✅ [STEP 7.2.1] SUCCESS: Document processed: ${documentLocation}`);
+            debug(`✅ [STEP 7.2.1] SUCCESS: Document processed: ${documentLocation}`);
 
             // Verify workspace exists before attempting to embed
-            console.log(`🔍 [STEP 7.2.2] Verifying workspace exists: ${workspaceSlug}`);
+            debug(`🔍 [STEP 7.2.2] Verifying workspace exists: ${workspaceSlug}`);
             const workspaceDetails = await this.getWorkspaceDetails(workspaceSlug);
             if (!workspaceDetails) {
-                console.error(`❌ [STEP 7.2.2] FAILED: Workspace not found: ${workspaceSlug}`);
+                error(`❌ [STEP 7.2.2] FAILED: Workspace not found: ${workspaceSlug}`);
                 throw new Error(
                     `Workspace not found: ${workspaceSlug}. Cannot embed document.`,
                 );
             }
-            console.log(`✅ [STEP 7.2.2] SUCCESS: Workspace verified: ${workspaceSlug}`);
+            debug(`✅ [STEP 7.2.2] SUCCESS: Workspace verified: ${workspaceSlug}`);
 
             // Step 2: EMBED document in workspace (not just update)
             // Using /update-embeddings endpoint (NOT /update)
-            console.log(`🔄 [STEP 7.2.3] Embedding document ${documentLocation} into workspace ${workspaceSlug}...`);
+            debug(`🔄 [STEP 7.2.3] Embedding document ${documentLocation} into workspace ${workspaceSlug}...`);
             const workspaceEmbedResponse = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/update-embeddings`,
                 {
@@ -724,7 +725,7 @@ Metadata:
                 }
                 
                 // Log detailed error information for debugging (Sequential Workflow Protocol)
-                console.error(`❌ [STEP 7.2.3] FAILED: Embedding document in workspace`, {
+                error(`❌ [STEP 7.2.3] FAILED: Embedding document in workspace`, {
                     status: workspaceEmbedResponse.status,
                     statusText: workspaceEmbedResponse.statusText,
                     workspaceSlug,
@@ -738,11 +739,11 @@ Metadata:
             }
 
             const embedResult = await workspaceEmbedResponse.json();
-            console.log(`✅ [STEP 7.2.3] SUCCESS: Document EMBEDDED in workspace: ${workspaceSlug}`);
+            debug(`✅ [STEP 7.2.3] SUCCESS: Document EMBEDDED in workspace: ${workspaceSlug}`);
 
             return true;
         } catch (error) {
-            console.error("❌ Error embedding SOW:", error);
+            error("❌ Error embedding SOW:", error);
             return false;
         }
     }
@@ -771,13 +772,13 @@ Metadata:
                     (e: any) => e.workspace?.slug === workspaceSlug,
                 );
                 if (existing) {
-                    console.log(`✅ Using existing embed ID: ${existing.id}`);
+                    debug(`✅ Using existing embed ID: ${existing.id}`);
                     return existing.id;
                 }
             }
 
             // Create new embed config
-            console.log(
+            debug(
                 `🆕 Creating new embed for workspace: ${workspaceSlug}`,
             );
             const response = await fetch(`${this.baseUrl}/api/v1/embed/new`, {
@@ -802,31 +803,31 @@ Metadata:
                 }),
             });
 
-            console.log(`📡 Create embed response status: ${response.status}`);
+            debug(`📡 Create embed response status: ${response.status}`);
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(
+                error(
                     `❌ Failed to create embed: ${response.status} ${response.statusText}`,
                 );
-                console.error(`❌ Error details:`, errorText);
+                error(`❌ Error details:`, errorText);
                 throw new Error(
                     `Failed to create embed: ${response.statusText} - ${errorText}`,
                 );
             }
 
             const responseText = await response.text();
-            console.log(
+            debug(
                 `📄 Embed response body:`,
                 responseText.substring(0, 200),
             );
 
             const data = JSON.parse(responseText);
-            console.log(`✅ Embed created with ID: ${data.embed?.id}`);
+            debug(`✅ Embed created with ID: ${data.embed?.id}`);
             return data.embed?.id || null;
         } catch (error) {
-            console.error("❌ Error getting/creating embed:", error);
-            console.error(
+            error("❌ Error getting/creating embed:", error);
+            error(
                 "❌ Error stack:",
                 error instanceof Error ? error.stack : "No stack trace",
             );
@@ -878,7 +879,7 @@ Metadata:
      */
     async embedCompanyKnowledgeBase(workspaceSlug: string): Promise<boolean> {
         try {
-            console.log(
+            debug(
                 `📚 Embedding Social Garden knowledge base into workspace: ${workspaceSlug}`,
             );
 
@@ -916,7 +917,7 @@ Metadata:
             }
 
             const documentLocation = rawTextData.documents[0].location;
-            console.log(`✅ Knowledge base processed: ${documentLocation}`);
+            debug(`✅ Knowledge base processed: ${documentLocation}`);
 
             // Step 2: Add knowledge base to workspace
             const workspaceUpdateResponse = await fetch(
@@ -931,18 +932,18 @@ Metadata:
             );
 
             if (!workspaceUpdateResponse.ok) {
-                console.warn(
+                warn(
                     "⚠️ Knowledge base processed but failed to add to workspace",
                 );
                 return false;
             }
 
-            console.log(
+            debug(
                 `✅ Social Garden knowledge base added to workspace: ${workspaceSlug}`,
             );
             return true;
         } catch (error) {
-            console.error("❌ Error embedding company knowledge base:", error);
+            error("❌ Error embedding company knowledge base:", error);
             return false;
         }
     }
@@ -977,13 +978,13 @@ Metadata:
         // This function will NOT overwrite the SOW prompt.
         // It will only set the prompt for other workspace types (e.g., client-facing Q&A).
         if (isSOWWorkspace) {
-            console.log(
+            debug(
                 `✅ INFO: Skipping prompt overwrite for SOW workspace '${workspaceSlug}'. The prompt is managed in the AnythingLLM UI.`,
             );
             return true;
         }
 
-        console.log(`Setting up client-facing prompt for ${workspaceSlug}`);
+        debug(`Setting up client-facing prompt for ${workspaceSlug}`);
         const prompt = this.getClientFacingPrompt(clientName);
 
         try {
@@ -1002,19 +1003,19 @@ Metadata:
 
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
-                console.error(
+                error(
                     `❌ Failed to set prompt (${response.status}):`,
                     error,
                 );
                 return false;
             }
 
-            console.log(
+            debug(
                 `✅ ${isSOWWorkspace ? "Architect" : "Client-facing"} prompt set for workspace: ${workspaceSlug}`,
             );
             return true;
         } catch (error) {
-            console.error("❌ Error setting workspace prompt:", error);
+            error("❌ Error setting workspace prompt:", error);
             return false;
         }
     }
@@ -1029,10 +1030,10 @@ Metadata:
         model: string = "claude-3-5-sonnet-20241022",
     ): Promise<boolean> {
         try {
-            console.log(
+            debug(
                 `⚙️ Configuring LLM provider for workspace: ${workspaceSlug}`,
             );
-            console.log(`   Provider: ${provider}, Model: ${model}`);
+            debug(`   Provider: ${provider}, Model: ${model}`);
 
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/update`,
@@ -1048,19 +1049,19 @@ Metadata:
 
             if (!response.ok) {
                 const error = await response.json().catch(() => ({}));
-                console.error(
+                error(
                     `❌ Failed to set LLM provider (${response.status}):`,
                     error,
                 );
                 return false;
             }
 
-            console.log(
+            debug(
                 `✅ LLM provider configured for workspace: ${workspaceSlug}`,
             );
             return true;
         } catch (error) {
-            console.error("❌ Error configuring LLM provider:", error);
+            error("❌ Error configuring LLM provider:", error);
             return false;
         }
     }
@@ -1168,7 +1169,7 @@ You have access to the full SOW document that has been embedded in this workspac
             const autoThreadName =
                 threadName || `Thread ${new Date().toLocaleString()}`;
 
-            console.log(
+            debug(
                 `🆕 Creating thread in workspace: ${workspaceSlug} (will auto-name on first message)`,
             );
 
@@ -1186,15 +1187,15 @@ You have access to the full SOW document that has been embedded in this workspac
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(
+                error(
                     `❌ Failed to create thread: ${response.status} ${response.statusText}`,
                 );
-                console.error(`📝 Response: ${errorText}`);
+                error(`📝 Response: ${errorText}`);
                 return null;
             }
 
             const data = await response.json();
-            console.log(
+            debug(
                 `✅ Thread created: ${data.thread.slug} (ID: ${data.thread.id}) - will auto-name on first message`,
             );
 
@@ -1203,7 +1204,7 @@ You have access to the full SOW document that has been embedded in this workspac
                 id: data.thread.id,
             };
         } catch (error) {
-            console.error("❌ Error creating thread:", error);
+            error("❌ Error creating thread:", error);
             return null;
         }
     }
@@ -1217,7 +1218,7 @@ You have access to the full SOW document that has been embedded in this workspac
         newName: string,
     ): Promise<boolean> {
         try {
-            console.log(`✏️ Renaming thread ${threadSlug} to "${newName}"`);
+            debug(`✏️ Renaming thread ${threadSlug} to "${newName}"`);
 
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/thread/${threadSlug}/update`,
@@ -1231,14 +1232,14 @@ You have access to the full SOW document that has been embedded in this workspac
             );
 
             if (response.ok) {
-                console.log(`✅ Thread renamed successfully`);
+                debug(`✅ Thread renamed successfully`);
                 return true;
             }
 
-            console.error(`❌ Failed to rename thread: ${response.statusText}`);
+            error(`❌ Failed to rename thread: ${response.statusText}`);
             return false;
         } catch (error) {
-            console.error("❌ Error updating thread:", error);
+            error("❌ Error updating thread:", error);
             return false;
         }
     }
@@ -1251,7 +1252,7 @@ You have access to the full SOW document that has been embedded in this workspac
         threadSlug: string,
     ): Promise<boolean> {
         try {
-            console.log(`🗑️ Deleting thread: ${threadSlug}`);
+            debug(`🗑️ Deleting thread: ${threadSlug}`);
 
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/thread/${threadSlug}`,
@@ -1262,14 +1263,14 @@ You have access to the full SOW document that has been embedded in this workspac
             );
 
             if (response.ok) {
-                console.log(`✅ Thread deleted successfully`);
+                debug(`✅ Thread deleted successfully`);
                 return true;
             }
 
-            console.error(`❌ Failed to delete thread: ${response.statusText}`);
+            error(`❌ Failed to delete thread: ${response.statusText}`);
             return false;
         } catch (error) {
-            console.error("❌ Error deleting thread:", error);
+            error("❌ Error deleting thread:", error);
             return false;
         }
     }
@@ -1285,7 +1286,7 @@ You have access to the full SOW document that has been embedded in this workspac
         retries = 5,
     ): Promise<any[]> {
         try {
-            console.log(
+            debug(
                 `🧵 [getThreadChats] Fetching messages from ${workspaceSlug}/${threadSlug}`,
             );
 
@@ -1300,14 +1301,14 @@ You have access to the full SOW document that has been embedded in this workspac
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log(
+                    debug(
                         `✅ [getThreadChats] Got ${(data.history || []).length} messages from thread (attempt ${attempt}/${retries})`,
                     );
 
                     // Return history array with role and content fields for conversion to ChatMessage
                     const history = data.history || [];
                     if (history.length > 0) {
-                        console.log(
+                        debug(
                             `💬 [getThreadChats] Sample message:`,
                             history[0],
                         );
@@ -1318,12 +1319,12 @@ You have access to the full SOW document that has been embedded in this workspac
 
                 // If 400 (thread doesn't exist) on first attempt, try creating it
                 if (response.status === 400 && attempt === 1) {
-                    console.warn(
+                    warn(
                         `⚠️ [getThreadChats] Thread doesn't exist (400). Creating thread now...`,
                     );
                     const newThread = await this.createThread(workspaceSlug);
                     if (newThread) {
-                        console.log(
+                        debug(
                             `✅ [getThreadChats] Thread created on-demand: ${newThread.slug}. Thread will be ready after next message.`,
                         );
                     }
@@ -1335,10 +1336,10 @@ You have access to the full SOW document that has been embedded in this workspac
                 if (response.status === 400 && attempt < retries) {
                     // Exponential backoff: 2s, 3s, 4s, 5s
                     const delayMs = 1000 * (attempt + 1);
-                    console.warn(
+                    warn(
                         `⚠️ [getThreadChats] Got 400 on attempt ${attempt}/${retries}, retrying in ${delayMs}ms...`,
                     );
-                    console.warn(
+                    warn(
                         `   (Thread might still be indexing in AnythingLLM)`,
                     );
                     await new Promise((resolve) =>
@@ -1349,7 +1350,7 @@ You have access to the full SOW document that has been embedded in this workspac
 
                 // If final attempt or non-400 error
                 const statusText = await response.text();
-                console.error(
+                error(
                     `❌ [getThreadChats] Failed (attempt ${attempt}/${retries}): ${response.status} ${statusText}`,
                 );
 
@@ -1360,7 +1361,7 @@ You have access to the full SOW document that has been embedded in this workspac
 
             return [];
         } catch (error) {
-            console.error("❌ Error getting thread chats:", error);
+            error("❌ Error getting thread chats:", error);
             return [];
         }
     }
@@ -1376,7 +1377,7 @@ You have access to the full SOW document that has been embedded in this workspac
     ): Promise<any> {
         try {
             if (!workspaceSlug || !threadSlug || !message) {
-                console.warn("⚠️ [chatWithThread] Missing required parameters:", {
+                warn("⚠️ [chatWithThread] Missing required parameters:", {
                     hasWorkspace: !!workspaceSlug,
                     hasThread: !!threadSlug,
                     hasMessage: !!message,
@@ -1405,7 +1406,7 @@ You have access to the full SOW document that has been embedded in this workspac
                     // If JSON parsing fails, use statusText
                 }
                 
-                console.error(
+                error(
                     `❌ Failed to send chat message: ${response.status} ${errorText}`,
                     {
                         workspace: workspaceSlug,
@@ -1421,7 +1422,7 @@ You have access to the full SOW document that has been embedded in this workspac
         } catch (error) {
             // Handle network errors, JSON parsing errors, etc.
             const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error("❌ Error sending chat message:", errorMessage, {
+            error("❌ Error sending chat message:", errorMessage, {
                 workspace: workspaceSlug,
                 thread: threadSlug,
                 error: error,
@@ -1486,17 +1487,17 @@ You have access to the full SOW document that has been embedded in this workspac
 
             // Final validation - be more explicit about what's wrong
             if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '' || apiKey === 'your_anythingllm_api_key_here') {
-                console.error(`❌ Missing or invalid API key for OpenAI endpoint.`);
-                console.error(`   - NEXT_PUBLIC_ANYTHINGLLM_API_KEY: ${typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY || 'NOT_SET') : 'PROCESS_UNDEFINED'}`);
-                console.error(`   - ANYTHINGLLM_API_KEY: ${typeof process !== 'undefined' ? (process.env.ANYTHINGLLM_API_KEY || 'NOT_SET') : 'PROCESS_UNDEFINED'}`);
-                console.error(`   - Instance key: ${this.apiKey ? 'SET' : 'NOT_SET'}`);
-                console.error(`   Check your environment variables in EasyPanel frontend service.`);
+                error(`❌ Missing or invalid API key for OpenAI endpoint.`);
+                error(`   - NEXT_PUBLIC_ANYTHINGLLM_API_KEY: ${typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY || 'NOT_SET') : 'PROCESS_UNDEFINED'}`);
+                error(`   - ANYTHINGLLM_API_KEY: ${typeof process !== 'undefined' ? (process.env.ANYTHINGLLM_API_KEY || 'NOT_SET') : 'PROCESS_UNDEFINED'}`);
+                error(`   - Instance key: ${this.apiKey ? 'SET' : 'NOT_SET'}`);
+                error(`   Check your environment variables in EasyPanel frontend service.`);
                 return null;
             }
 
-            console.log(`🤖 Calling OpenAI compatible endpoint: ${endpoint}`);
-            console.log(`   Workspace (model param): ${workspaceModel}`);
-            console.log(`   API Key: ${apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING'}`);
+            debug(`🤖 Calling OpenAI compatible endpoint: ${endpoint}`);
+            debug(`   Workspace (model param): ${workspaceModel}`);
+            debug(`   API Key: ${apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING'}`);
             
             // Helper function to make the API call
             const makeRequest = async (keyToUse: string): Promise<Response> => {
@@ -1519,8 +1520,8 @@ You have access to the full SOW document that has been embedded in this workspac
 
             // If we get a 401, retry once with a fresh API key check
             if (response.status === 401) {
-                console.warn(`🔑 [401 Error] Retrying with fresh API key...`);
-                console.error(`🔑 [401 Error] API Key status:`, {
+                warn(`🔑 [401 Error] Retrying with fresh API key...`);
+                error(`🔑 [401 Error] API Key status:`, {
                     hasApiKey: !!apiKey,
                     apiKeyPrefix: apiKey ? apiKey.substring(0, 8) : 'N/A',
                     apiKeyLength: apiKey ? apiKey.length : 0,
@@ -1536,7 +1537,7 @@ You have access to the full SOW document that has been embedded in this workspac
                 }
                 
                 if (freshApiKey && freshApiKey !== apiKey) {
-                    console.log(`🔄 Using fresh API key (prefix: ${freshApiKey.substring(0, 8)}...)`);
+                    debug(`🔄 Using fresh API key (prefix: ${freshApiKey.substring(0, 8)}...)`);
                     this.apiKey = freshApiKey;
                     apiKey = freshApiKey;
                     // Retry the request with fresh key
@@ -1569,17 +1570,17 @@ You have access to the full SOW document that has been embedded in this workspac
                         errorText = await response.text();
                     }
                 } catch (e) {
-                    console.warn(`⚠️ Could not read error response body:`, e);
+                    warn(`⚠️ Could not read error response body:`, e);
                 }
                 
-                console.error(`❌ OpenAI API call failed: ${response.status} ${response.statusText}`);
+                error(`❌ OpenAI API call failed: ${response.status} ${response.statusText}`);
                 if (errorText) {
-                    console.error(`❌ Error body:`, errorText);
+                    error(`❌ Error body:`, errorText);
                 }
                 
                 // Log detailed error for 401 to help debug
                 if (response.status === 401) {
-                    console.error(`🔑 [401 Error] Detailed Authentication Failure:`, {
+                    error(`🔑 [401 Error] Detailed Authentication Failure:`, {
                         status: response.status,
                         statusText: response.statusText,
                         endpoint: endpoint,
@@ -1597,26 +1598,26 @@ You have access to the full SOW document that has been embedded in this workspac
                     // Check for WWW-Authenticate header which often contains auth error details
                     const wwwAuth = responseHeaders['www-authenticate'];
                     if (wwwAuth) {
-                        console.error(`🔑 [401 Error] WWW-Authenticate header: ${wwwAuth}`);
+                        error(`🔑 [401 Error] WWW-Authenticate header: ${wwwAuth}`);
                     }
                     
                     // Log detailed error and return null (caller should handle)
-                    console.error(`🔑 [401 Error] Authentication failed. Please verify NEXT_PUBLIC_ANYTHINGLLM_API_KEY is set correctly in your environment variables.`);
-                    console.error(`🔑 [401 Error] Endpoint: ${endpoint}`);
+                    error(`🔑 [401 Error] Authentication failed. Please verify NEXT_PUBLIC_ANYTHINGLLM_API_KEY is set correctly in your environment variables.`);
+                    error(`🔑 [401 Error] Endpoint: ${endpoint}`);
                     if (errorJson) {
-                        console.error(`🔑 [401 Error] Server error JSON:`, errorJson);
+                        error(`🔑 [401 Error] Server error JSON:`, errorJson);
                     } else if (errorText) {
-                        console.error(`🔑 [401 Error] Server error text: ${errorText}`);
+                        error(`🔑 [401 Error] Server error text: ${errorText}`);
                     } else {
-                        console.error(`🔑 [401 Error] Server returned empty response body`);
+                        error(`🔑 [401 Error] Server returned empty response body`);
                     }
                     return null;
                 }
                 
                 // For other errors, log and return null
-                console.error(`❌ [API Error] Status ${response.status}: ${errorText || response.statusText}`);
+                error(`❌ [API Error] Status ${response.status}: ${errorText || response.statusText}`);
                 if (errorJson) {
-                    console.error(`❌ [API Error] Error details:`, errorJson);
+                    error(`❌ [API Error] Error details:`, errorJson);
                 }
                 return null;
             }
@@ -1626,10 +1627,10 @@ You have access to the full SOW document that has been embedded in this workspac
             
             if (contentType.includes("text/event-stream") || contentType.includes("stream")) {
                 // Handle streaming response (SSE format)
-                console.log(`📡 Streaming response detected, parsing SSE format...`);
+                debug(`📡 Streaming response detected, parsing SSE format...`);
                 const reader = response.body?.getReader();
                 if (!reader) {
-                    console.error(`❌ No reader available for streaming response`);
+                    error(`❌ No reader available for streaming response`);
                     return null;
                 }
 
@@ -1672,15 +1673,15 @@ You have access to the full SOW document that has been embedded in this workspac
                 }
 
                 if (fullContent) {
-                    console.log(`✅ Parsed streaming response: ${fullContent.length} characters`);
+                    debug(`✅ Parsed streaming response: ${fullContent.length} characters`);
                     return fullContent;
                 }
                 
-                console.warn(`⚠️ No content extracted from streaming response`);
+                warn(`⚠️ No content extracted from streaming response`);
                 return null;
             } else {
                 // Handle JSON response
-                console.log(`📦 JSON response detected`);
+                debug(`📦 JSON response detected`);
                 const data = await response.json();
                 
                 // Handle different response formats
@@ -1690,15 +1691,15 @@ You have access to the full SOW document that has been embedded in this workspac
                                null;
                 
                 if (content) {
-                    console.log(`✅ Parsed JSON response: ${content.length} characters`);
+                    debug(`✅ Parsed JSON response: ${content.length} characters`);
                     return content;
                 }
                 
-                console.warn(`⚠️ No content found in JSON response:`, data);
+                warn(`⚠️ No content found in JSON response:`, data);
                 return null;
             }
         } catch (error) {
-            console.error("❌ Error calling OpenAI endpoint:", error);
+            error("❌ Error calling OpenAI endpoint:", error);
             return null;
         }
     }
@@ -1727,7 +1728,7 @@ You have access to the full SOW document that has been embedded in this workspac
             );
 
             if (!response.ok) {
-                console.error(
+                error(
                     `❌ Failed to stream chat: ${response.statusText}`,
                 );
                 return;
@@ -1762,11 +1763,11 @@ You have access to the full SOW document that has been embedded in this workspac
                             }
                             // Handle other event types if needed
                             else if (data.type === 'statusUpdate' && data.message) {
-                                console.log(`📡 [Stream Status]: ${data.message}`);
+                                debug(`📡 [Stream Status]: ${data.message}`);
                             }
                         } catch (e) {
                             // If JSON parsing fails, pass the line as-is (backwards compatibility)
-                            console.warn('⚠️ Failed to parse SSE chunk:', line.substring(0, 100));
+                            warn('⚠️ Failed to parse SSE chunk:', line.substring(0, 100));
                             onChunk(line);
                         }
                     } else {
@@ -1776,7 +1777,7 @@ You have access to the full SOW document that has been embedded in this workspac
                 }
             }
         } catch (error) {
-            console.error("❌ Error streaming chat:", error);
+            error("❌ Error streaming chat:", error);
         }
     }
 
@@ -1785,7 +1786,7 @@ You have access to the full SOW document that has been embedded in this workspac
      */
     async deleteWorkspace(workspaceSlug: string): Promise<boolean> {
         try {
-            console.log(`🗑️ Deleting workspace: ${workspaceSlug}`);
+            debug(`🗑️ Deleting workspace: ${workspaceSlug}`);
 
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}`,
@@ -1796,18 +1797,18 @@ You have access to the full SOW document that has been embedded in this workspac
             );
 
             if (response.ok) {
-                console.log(
+                debug(
                     `✅ Workspace deleted successfully (all threads cascaded)`,
                 );
                 return true;
             }
 
-            console.error(
+            error(
                 `❌ Failed to delete workspace: ${response.statusText}`,
             );
             return false;
         } catch (error) {
-            console.error("❌ Error deleting workspace:", error);
+            error("❌ Error deleting workspace:", error);
             return false;
         }
     }
@@ -1820,7 +1821,7 @@ You have access to the full SOW document that has been embedded in this workspac
         newName: string,
     ): Promise<boolean> {
         try {
-            console.log(
+            debug(
                 `✏️ Renaming workspace ${workspaceSlug} to "${newName}"`,
             );
 
@@ -1836,16 +1837,16 @@ You have access to the full SOW document that has been embedded in this workspac
             );
 
             if (response.ok) {
-                console.log(`✅ Workspace renamed successfully`);
+                debug(`✅ Workspace renamed successfully`);
                 return true;
             }
 
-            console.error(
+            error(
                 `❌ Failed to rename workspace: ${response.statusText}`,
             );
             return false;
         } catch (error) {
-            console.error("❌ Error updating workspace:", error);
+            error("❌ Error updating workspace:", error);
             return false;
         }
     }
@@ -1866,7 +1867,7 @@ You have access to the full SOW document that has been embedded in this workspac
             );
 
             if (existing) {
-                console.log(
+                debug(
                     `✅ Using existing master dashboard: ${masterDashboardSlug}`,
                 );
                 // Always ensure the dashboard prompt is correct (idempotent)
@@ -1876,7 +1877,7 @@ You have access to the full SOW document that has been embedded in this workspac
             }
 
             // Create master dashboard workspace
-            console.log(
+            debug(
                 `🆕 Creating master dashboard workspace: ${masterDashboardSlug}`,
             );
             const response = await fetch(
@@ -1898,7 +1899,7 @@ You have access to the full SOW document that has been embedded in this workspac
             }
 
             const data: WorkspaceResponse = await response.json();
-            console.log(`✅ Master dashboard created: ${data.workspace.slug}`);
+            debug(`✅ Master dashboard created: ${data.workspace.slug}`);
 
             // Embed company knowledge base into master dashboard
             await this.embedCompanyKnowledgeBase(data.workspace.slug);
@@ -1910,7 +1911,7 @@ You have access to the full SOW document that has been embedded in this workspac
 
             return data.workspace.slug;
         } catch (error) {
-            console.error("❌ Error creating master dashboard:", error);
+            error("❌ Error creating master dashboard:", error);
             // Return the slug anyway so app doesn't break
             return masterDashboardSlug;
         }
@@ -1950,18 +1951,18 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             );
 
             if (response.ok) {
-                console.log(
+                debug(
                     `✅ Master dashboard prompt set for workspace: ${workspaceSlug}`,
                 );
                 return true;
             }
 
-            console.warn(
+            warn(
                 `⚠️ Failed to set master dashboard prompt: ${response.status}`,
             );
             return false;
         } catch (error) {
-            console.error("❌ Error setting master dashboard prompt:", error);
+            error("❌ Error setting master dashboard prompt:", error);
             return false;
         }
     }
@@ -1982,13 +1983,13 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             const masterWorkspaceSlug = "sow-generator";
             const masterDashboardSlug = await this.getOrCreateMasterDashboard();
 
-            console.log(`📊 [STEP 7] Embedding SOW in workspaces (Sequential Workflow Protocol)`);
-            console.log(
+            debug(`📊 [STEP 7] Embedding SOW in workspaces (Sequential Workflow Protocol)`);
+            debug(
                 `   📁 Master generation workspace: ${masterWorkspaceSlug}`,
             );
-            console.log(`   � Master dashboard: ${masterDashboardSlug}`);
+            debug(`   � Master dashboard: ${masterDashboardSlug}`);
             if (clientContext) {
-                console.log(`   👤 Client context: ${clientContext}`);
+                debug(`   👤 Client context: ${clientContext}`);
             }
 
             // Convert content to HTML if needed
@@ -2001,9 +2002,9 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                         // Import tiptapToHTML dynamically to avoid build issues
                         const { tiptapToHTML } = await import('@/lib/export-utils');
                         htmlContent = tiptapToHTML(jsonContent);
-                        console.log(`✅ Converted JSON content to HTML (${htmlContent.length} chars)`);
+                        debug(`✅ Converted JSON content to HTML (${htmlContent.length} chars)`);
                     } catch (parseError) {
-                        console.warn(`⚠️ Failed to parse JSON, treating as HTML:`, parseError);
+                        warn(`⚠️ Failed to parse JSON, treating as HTML:`, parseError);
                         htmlContent = sowContent; // Fallback to treating as HTML
                     }
                 } else {
@@ -2013,7 +2014,7 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                 // TipTap JSON object
                 const { tiptapToHTML } = await import('@/lib/export-utils');
                 htmlContent = tiptapToHTML(sowContent);
-                console.log(`✅ Converted TipTap JSON object to HTML (${htmlContent.length} chars)`);
+                debug(`✅ Converted TipTap JSON object to HTML (${htmlContent.length} chars)`);
             } else {
                 throw new Error(`Invalid content type: ${typeof sowContent}`);
             }
@@ -2027,14 +2028,14 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             // Remove HTML tags and check if there's actual text content
             const textOnly = htmlContent.replace(/<[^>]*>/g, '').trim();
             if (textOnly.length < 20) {
-                console.log(`⏭️ [STEP 7.1] Content validation: Content too small (${textOnly.length} chars). Skipping embedding - will embed when content is generated.`);
+                debug(`⏭️ [STEP 7.1] Content validation: Content too small (${textOnly.length} chars). Skipping embedding - will embed when content is generated.`);
                 return true; // Return true to not block the flow, but skip actual embedding
             }
 
-            console.log(`📊 [STEP 7.1] Content validation: Content size acceptable (${textOnly.length} chars). Proceeding with embedding.`);
+            debug(`📊 [STEP 7.1] Content validation: Content size acceptable (${textOnly.length} chars). Proceeding with embedding.`);
 
             // Step 1: Embed in master GENERATION workspace (RAG context)
-            console.log(`📊 [STEP 7.2] Embedding SOW in master generation workspace: ${masterWorkspaceSlug}`);
+            debug(`📊 [STEP 7.2] Embedding SOW in master generation workspace: ${masterWorkspaceSlug}`);
             const masterEmbed = await this.embedSOWDocument(
                 masterWorkspaceSlug,
                 sowTitle,
@@ -2042,13 +2043,13 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             );
 
             if (!masterEmbed) {
-                console.error(
+                error(
                     `❌ [STEP 7.2] FAILED: Embedding in master generation workspace: ${masterWorkspaceSlug}`,
                 );
                 return false;
             }
 
-            console.log(
+            debug(
                 `✅ [STEP 7.2] SUCCESS: SOW embedded in master generation workspace: ${masterWorkspaceSlug}`,
             );
 
@@ -2057,7 +2058,7 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                 ? `[${clientContext.toUpperCase()}] ${sowTitle}`
                 : sowTitle;
 
-            console.log(`📊 [STEP 7.3] Embedding SOW in master dashboard: ${masterDashboardSlug}`);
+            debug(`📊 [STEP 7.3] Embedding SOW in master dashboard: ${masterDashboardSlug}`);
             const dashboardEmbed = await this.embedSOWDocument(
                 masterDashboardSlug,
                 dashboardTitle,
@@ -2065,18 +2066,18 @@ When asked for analytics, provide clear, actionable insights with specific numbe
             );
 
             if (!dashboardEmbed) {
-                console.error(`❌ [STEP 7.3] FAILED: Embedding in master dashboard: ${masterDashboardSlug}`);
+                error(`❌ [STEP 7.3] FAILED: Embedding in master dashboard: ${masterDashboardSlug}`);
                 return false;
             }
 
-            console.log(`✅ [STEP 7.3] SUCCESS: SOW embedded in master dashboard for analytics`);
-            console.log(
+            debug(`✅ [STEP 7.3] SUCCESS: SOW embedded in master dashboard for analytics`);
+            debug(
                 `✅✅✅ [STEP 7] COMPLETE: SOW successfully embedded in all required workspaces!`,
             );
 
             return true;
         } catch (error) {
-            console.error("❌ Error embedding SOW in workspaces:", error);
+            error("❌ Error embedding SOW in workspaces:", error);
             return false;
         }
     }
@@ -2130,7 +2131,7 @@ When asked for analytics, provide clear, actionable insights with specific numbe
 
             return !!dashboardOk;
         } catch (e) {
-            console.error("❌ Error syncing updated SOW in workspaces:", e);
+            error("❌ Error syncing updated SOW in workspaces:", e);
             return false;
         }
     }
@@ -2176,7 +2177,7 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                 },
             };
         } catch (error) {
-            console.error(`❌ Error mirroring workspace ${workspaceSlug}:`, error);
+            error(`❌ Error mirroring workspace ${workspaceSlug}:`, error);
             return null;
         }
     }
@@ -2197,7 +2198,7 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                 timestamp: chat.timestamp || Date.now(),
             }));
         } catch (error) {
-            console.error(
+            error(
                 `❌ Error mirroring thread ${workspaceSlug}/${threadSlug}:`,
                 error,
             );

@@ -17,6 +17,7 @@ import { sanitizeEmptyTextNodes } from "@/lib/page-utils";
 import { extractSOWStructuredJson } from "@/lib/export-utils";
 import { convertMarkdownToNovelJSON } from "@/lib/editor-utils";
 import { ARCHITECT_SYSTEM_PROMPT } from "@/lib/system-prompt";
+import { debug, error, warn } from "@/lib/logger";
 
 /**
  * Determines if a response is a "final" response ready for auto-insertion
@@ -37,7 +38,7 @@ function isFinalResponse(content: string): boolean {
     // 🎯 PRIORITY 1: If it has the explicit marker, it's ALWAYS final (highest priority)
     const hasMarker = content.includes("*** Insert into editor:");
     if (hasMarker) {
-        console.log("✅ [Selective Insert] Explicit marker found - will auto-insert");
+        debug("✅ [Selective Insert] Explicit marker found - will auto-insert");
         return true;
     }
 
@@ -64,7 +65,7 @@ function isFinalResponse(content: string): boolean {
 
     // 🎯 PRIORITY 2: If it has SOW content (JSON, structure), it's final (even if it has some questions)
     if (hasFinalIndicator) {
-        console.log("✅ [Selective Insert] SOW content detected - will auto-insert");
+        debug("✅ [Selective Insert] SOW content detected - will auto-insert");
         return true;
     }
 
@@ -99,13 +100,13 @@ function isFinalResponse(content: string): boolean {
     // If response contains intermediate indicators AND no SOW content, it's NOT final
     for (const pattern of intermediateIndicators) {
         if (pattern.test(cleanedContent)) {
-            console.log("🔍 [Selective Insert] Detected intermediate response (question/confirmation without SOW content) - skipping");
+            debug("🔍 [Selective Insert] Detected intermediate response (question/confirmation without SOW content) - skipping");
             return false;
         }
     }
 
     // Default: if we get here and no clear indicators, don't auto-insert
-    console.log("🔍 [Selective Insert] No clear SOW content or markers detected - skipping auto-insert");
+    debug("🔍 [Selective Insert] No clear SOW content or markers detected - skipping auto-insert");
     return false;
 }
 
@@ -146,7 +147,7 @@ export function useChatManager({
 
     const log = useCallback((...args: any[]) => {
         if (process.env.NODE_ENV === "development") {
-            console.log(...args);
+            debug(...args);
         }
     }, []);
 
@@ -223,7 +224,7 @@ export function useChatManager({
         formData.append('file', file);
         
         try {
-            console.log(`📤 [Frontend] Uploading file: ${file.name} (${file.size} bytes)`);
+            debug(`📤 [Frontend] Uploading file: ${file.name} (${file.size} bytes)`);
             const res = await fetch('/api/extract-text', {
                 method: 'POST',
                 body: formData
@@ -239,7 +240,7 @@ export function useChatManager({
                     errorMessage = `Server error: ${res.status} ${res.statusText}`;
                 }
                 
-                console.error(`❌ [Frontend] Extraction failed: ${errorMessage}`);
+                error(`❌ [Frontend] Extraction failed: ${errorMessage}`);
                 toast.error(`❌ PDF Extraction Failed: ${errorMessage}`);
                 throw new Error(errorMessage);
             }
@@ -248,13 +249,13 @@ export function useChatManager({
             
             if (!text || text.trim().length === 0) {
                 const errorMsg = 'No text could be extracted from the PDF. The file may be image-only or corrupted.';
-                console.error(`❌ [Frontend] ${errorMsg}`);
+                error(`❌ [Frontend] ${errorMsg}`);
                 toast.error(`❌ ${errorMsg}`);
                 throw new Error(errorMsg);
             }
             
             const rawText = text;
-            console.log(`✅ [Frontend] Text extracted successfully: ${rawText.length} characters`);
+            debug(`✅ [Frontend] Text extracted successfully: ${rawText.length} characters`);
             setPendingFileText(rawText);
             
             // 2. Transient Injection (Handshake)
@@ -284,12 +285,12 @@ export function useChatManager({
             if (!workspaceSlug) {
                 workspaceSlug = "gen-the-architect"; // Fallback
             }
-            console.log(`🔍 [Chat Manager] Using workspace slug: ${workspaceSlug} for chatWithOpenAI (from currentDoc: ${!!currentDoc?.workspaceSlug}, currentWorkspace: ${!!currentWorkspaceId})`);
+            debug(`🔍 [Chat Manager] Using workspace slug: ${workspaceSlug} for chatWithOpenAI (from currentDoc: ${!!currentDoc?.workspaceSlug}, currentWorkspace: ${!!currentWorkspaceId})`);
             
             const response = await anythingLLM.chatWithOpenAI(messages, workspaceSlug);
             
             if (!response) {
-                console.error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
+                error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
                 toast.error("Authentication failed. Please check your AnythingLLM API key configuration.");
                 return;
             }
@@ -309,7 +310,7 @@ export function useChatManager({
             }
             
         } catch (error: any) {
-            console.error("❌ [Frontend] File upload error:", error);
+            error("❌ [Frontend] File upload error:", error);
             
             // Show specific error message if available
             const errorMessage = error.message || 'Failed to process file. Please check the file format and try again.';
@@ -397,16 +398,16 @@ export function useChatManager({
                 );
                 finalContent = convertedContent;
             } catch (error) {
-                console.error("Error converting content:", error);
+                error("Error converting content:", error);
                 finalContent = { type: "doc", content: [] };
             }
             
             // CRITICAL DIAGNOSTIC: Check content type before insertion
-            console.log("🧩 Final Content Type Check:");
-            console.log("FinalContent is object:", typeof finalContent === 'object' && finalContent !== null);
-            console.log("FinalContent type attribute:", finalContent?.type);
+            debug("🧩 Final Content Type Check:");
+            debug("FinalContent is object:", typeof finalContent === 'object' && finalContent !== null);
+            debug("FinalContent type attribute:", finalContent?.type);
             if (typeof finalContent === 'string' || !finalContent || finalContent.type !== 'doc') {
-                console.error("❌ CRITICAL INSERTION FAILURE: Final content is not a valid TipTap JSON object (type: 'doc'). Inserting raw string is blocked.");
+                error("❌ CRITICAL INSERTION FAILURE: Final content is not a valid TipTap JSON object (type: 'doc'). Inserting raw string is blocked.");
                 toast.error("Insertion failed: Content conversion error.");
                 return; // Block insertion of invalid data
             }
@@ -459,7 +460,7 @@ export function useChatManager({
                     } catch (embedError) {
                         // Log but don't throw - embedding is optional
                         log("⚠️ Embedding error (non-critical):", embedError);
-                        console.warn("⚠️ Failed to embed document to AnythingLLM (this is non-critical):", embedError);
+                        warn("⚠️ Failed to embed document to AnythingLLM (this is non-critical):", embedError);
                     }
                 })();
             }
@@ -511,12 +512,12 @@ export function useChatManager({
                  if (!workspaceSlug) {
                      workspaceSlug = "gen-the-architect"; // Fallback
                  }
-                 console.log(`🔍 [Chat Manager] Using workspace slug: ${workspaceSlug} for chatWithOpenAI (generation) (from currentDoc: ${!!currentDoc?.workspaceSlug}, currentWorkspace: ${!!currentWorkspaceId})`);
+                 debug(`🔍 [Chat Manager] Using workspace slug: ${workspaceSlug} for chatWithOpenAI (generation) (from currentDoc: ${!!currentDoc?.workspaceSlug}, currentWorkspace: ${!!currentWorkspaceId})`);
                  
                  const response = await anythingLLM.chatWithOpenAI(messages, workspaceSlug);
                  
                  if (!response) {
-                     console.error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
+                     error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
                      toast.error("Authentication failed. Please check your AnythingLLM API key configuration.");
                      return;
                  }
@@ -532,7 +533,7 @@ export function useChatManager({
                      
                      // 🎯 SELECTIVE AUTO-INSERTION: Only insert final responses
                      const isFinal = isFinalResponse(response);
-                     console.log(`🔍 [Selective Insert] Response analysis:`, {
+                     debug(`🔍 [Selective Insert] Response analysis:`, {
                          isFinal,
                          responseLength: response.length,
                          hasClient: /^Client:\s*\w+/i.test(response),
@@ -550,21 +551,21 @@ export function useChatManager({
                              contentToInsert = parts.length > 1 ? parts[parts.length - 1] : response.replace(/\*\*\* Insert into editor:\s*/, '');
                          }
                          
-                         console.log(`✅ [Selective Insert] Inserting content into editor (length: ${contentToInsert.length})`);
+                         debug(`✅ [Selective Insert] Inserting content into editor (length: ${contentToInsert.length})`);
                          
                          // Process content through conversion logic and insert
                          extractFinancialReasoning(contentToInsert);
                          await handleInsertContent(contentToInsert, []);
                      } else {
-                         console.log("⏭️ [Selective Insert] Skipping auto-insert for intermediate response");
-                         console.log("⏭️ [Selective Insert] Response preview:", response.substring(0, 300));
+                         debug("⏭️ [Selective Insert] Skipping auto-insert for intermediate response");
+                         debug("⏭️ [Selective Insert] Response preview:", response.substring(0, 300));
                      }
                      
                      setHandshakeState('idle'); // Reset
                      setPendingFileText(null); // Clear memory
                  }
              } catch (e) {
-                 console.error(e);
+                 error(e);
                  toast.error("Generation failed.");
                  setHandshakeState('waiting_confirmation'); // Let them try again
              } finally {
@@ -794,16 +795,16 @@ export function useChatManager({
                     );
                     finalContent = convertedContent;
                 } catch (error) {
-                    console.error("Error converting content:", error);
+                    error("Error converting content:", error);
                     finalContent = { type: "doc", content: [] };
                 }
                 
                 // CRITICAL DIAGNOSTIC: Check content type before insertion
-                console.log("🧩 [Automatic Insertion] Final Content Type Check:");
-                console.log("FinalContent is object:", typeof finalContent === 'object' && finalContent !== null);
-                console.log("FinalContent type attribute:", finalContent?.type);
+                debug("🧩 [Automatic Insertion] Final Content Type Check:");
+                debug("FinalContent is object:", typeof finalContent === 'object' && finalContent !== null);
+                debug("FinalContent type attribute:", finalContent?.type);
                 if (typeof finalContent === 'string' || !finalContent || finalContent.type !== 'doc') {
-                    console.error("❌ CRITICAL INSERTION FAILURE: Final content is not a valid TipTap JSON object (type: 'doc'). Inserting raw string is blocked.");
+                    error("❌ CRITICAL INSERTION FAILURE: Final content is not a valid TipTap JSON object (type: 'doc'). Inserting raw string is blocked.");
                     toast.error("Insertion failed: Content conversion error.");
                     return; // Block insertion of invalid data
                 }
@@ -819,7 +820,7 @@ export function useChatManager({
                     if (setLatestEditorJSON) {
                         setLatestEditorJSON(finalContent);
                     }
-                    console.log("🔒 [Automatic Fix] Editor updated and state locked.");
+                    debug("🔒 [Automatic Fix] Editor updated and state locked.");
                 }
                 // [END FIX]
                 
