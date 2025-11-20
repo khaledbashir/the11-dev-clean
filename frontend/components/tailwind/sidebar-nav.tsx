@@ -695,8 +695,8 @@ export default function SidebarNav({
         </button>
       )}
 
-      {/* LOGO HEADER */}
-      <div className="flex-shrink-0 p-6 border-b border-gray-800">
+      {/* LOGO HEADER - Padding right accounts for toggle button */}
+      <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-gray-800 pr-20">
         <h2 className="text-xl font-bold text-white">Social Garden</h2>
       </div>
 
@@ -708,7 +708,7 @@ export default function SidebarNav({
             placeholder="Search workspaces..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 text-xs bg-gray-900 border-gray-700 text-gray-300 placeholder:text-gray-600 max-w-xs flex-shrink-0"
+            className="h-8 text-xs bg-gray-900/50 border-gray-700 text-gray-300 placeholder:text-gray-500 focus-visible:ring-2 focus-visible:ring-[#1CBF79]/50 focus-visible:border-[#1CBF79] max-w-xs flex-shrink-0"
           />
           <button
             onClick={() => {
@@ -733,7 +733,9 @@ export default function SidebarNav({
             >
               {/* WORKSPACES SECTION */}
               {(() => {
-                const clientFolders = localFolders.filter(f =>
+                // Use workspaces prop if available, otherwise fall back to localFolders
+                const sourceFolders = Array.isArray(workspaces) && workspaces.length > 0 ? workspaces : localFolders;
+                const clientFolders = sourceFolders.filter(f =>
                   !isAgentFolder(f) && !isSystemFolder(f) &&
                   (f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                    localDocuments.filter(d => d.folderId === f.id).some(d => d.title.toLowerCase().includes(searchQuery.toLowerCase())))
@@ -770,7 +772,8 @@ export default function SidebarNav({
 
                     {foldersExpanded && clientFolders.length === 0 && (
                       <div className="px-4 py-4 text-center">
-                        <p className="text-xs text-gray-600">No workspaces yet</p>
+                        <p className="text-xs text-gray-500">No workspaces yet</p>
+                        <p className="text-xs text-gray-600 mt-1">Create your first workspace to get started</p>
                       </div>
                     )}
                   </div>
@@ -786,15 +789,15 @@ export default function SidebarNav({
         <div className="px-4 py-2">
           <button
             onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-            className="w-full flex items-center gap-2 px-2 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors active:scale-[0.98]"
             title="Settings"
           >
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
+            <Settings className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1 text-left">Settings</span>
             {showSettingsMenu ? (
-              <ChevronDown className="w-3 h-3 ml-auto" />
+              <ChevronDown className="w-3 h-3 flex-shrink-0" />
             ) : (
-              <ChevronRight className="w-3 h-3 ml-auto" />
+              <ChevronRight className="w-3 h-3 flex-shrink-0" />
             )}
           </button>
           

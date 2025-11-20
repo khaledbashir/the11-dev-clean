@@ -10,8 +10,11 @@ import {
     Eye,
     EyeOff,
     FilePlus,
+    Search,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { useState } from "react";
 
 interface DocumentStatusBarProps {
     title: string;
@@ -64,16 +67,16 @@ export function DocumentStatusBar({
     const IconComponent = config.icon;
 
     return (
-        <div className="h-14 bg-[#0E0F0F] border-b border-[#2A2A2D] flex items-center justify-between px-3 sm:px-6 flex-shrink-0 overflow-hidden">
+        <div className="h-14 bg-[#0E0F0F] border-b border-[#2A2A2D] flex items-center justify-between px-3 sm:px-6 flex-shrink-0">
             {/* Title */}
-            <div className="flex-1 min-w-0 mr-4">
+            <div className="flex-1 min-w-0 mr-4 overflow-hidden">
                 <h2 className="text-base sm:text-lg font-semibold text-white truncate">
                     {title}
                 </h2>
             </div>
 
             {/* Actions Section - Responsive with overflow handling */}
-            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0 overflow-x-auto scrollbar-hide">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 min-w-0">
                 {/* Export Buttons - Responsive layout */}
                 <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                     {onToggleGrandTotal && (
