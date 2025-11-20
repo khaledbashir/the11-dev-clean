@@ -678,7 +678,7 @@ export default function SidebarNav({
   }
 
   return (
-    <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible">
+    <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible resize-x">
       {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner - ALWAYS VISIBLE */}
       {onToggleSidebar && (
         <button

@@ -162,6 +162,29 @@
     scrollbar-width: none;  /* Firefox */
   }
   
+  /* Sidebar resize handle */
+  .sidebar-nav-container {
+    resize: horizontal;
+    min-width: 256px;
+    max-width: 512px;
+  }
+  
+  .sidebar-nav-container::-webkit-resizer {
+    width: 8px;
+    height: 100%;
+    background: #374151;
+    cursor: col-resize;
+    position: relative;
+  }
+  
+  .sidebar-nav-container::-webkit-resizer:hover {
+    background: #4b5563;
+  }
+  
+  .sidebar-nav-container::-webkit-resizer:active {
+    background: #1CBF79;
+  }
+  
   .scrollbar-hide::-webkit-scrollbar {
     display: none;  /* Safari and Chrome */
   }
