@@ -137,7 +137,6 @@ export default function WorkspaceChat({
     
     // 🎯 Copy button state
     const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
-    const [copiedJsonId, setCopiedJsonId] = useState<string | null>(null);
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
@@ -479,20 +478,12 @@ export default function WorkspaceChat({
         onSendMessage(messageToRetry, threadSlug, []);
     };
 
-    // 🎯 Copy prose content
-    const handleCopyProse = async (content: string, messageId: string) => {
-        // Remove JSON blocks and thinking tags for prose copy
-        let proseContent = content;
-        proseContent = proseContent.replace(/```json[\s\S]*?```/gi, '').trim();
-        proseContent = proseContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-        proseContent = proseContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        proseContent = proseContent.replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, '').trim();
-        proseContent = proseContent.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
-
+    // 🎯 Universal copy handler - copies entire response content
+    const handleCopyResponse = async (content: string, messageId: string) => {
         try {
-            await navigator.clipboard.writeText(proseContent);
+            await navigator.clipboard.writeText(content);
             setCopiedMessageId(messageId);
-            toast.success("Prose copied to clipboard");
+            toast.success("Response copied to clipboard");
             setTimeout(() => setCopiedMessageId(null), 2000);
         } catch (error) {
             console.error("Failed to copy:", error);
@@ -500,25 +491,61 @@ export default function WorkspaceChat({
         }
     };
 
-    // 🎯 Copy JSON content
-    const handleCopyJSON = async (content: string, messageId: string) => {
-        // Extract JSON block
-        const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/i);
-        if (!jsonMatch || !jsonMatch[1]) {
-            toast.error("No JSON block found in this message");
+    // 🎯 Regenerate response handler - resends the last user message
+    const handleRegenerateResponse = async (messageId: string) => {
+        // Find the user message that prompted this assistant response
+        const messageIndex = chatMessages.findIndex(m => m.id === messageId);
+        if (messageIndex === -1) return;
+
+        // Find the previous user message
+        let userMessageIndex = -1;
+        for (let i = messageIndex - 1; i >= 0; i--) {
+            if (chatMessages[i].role === "user") {
+                userMessageIndex = i;
+                break;
+            }
+        }
+
+        if (userMessageIndex === -1) {
+            // Fallback to lastUserPrompt if available
+            const messageToRetry = lastUserPrompt;
+            if (!messageToRetry.trim() || isLoading) {
+                if (!messageToRetry.trim()) {
+                    toast.error("No previous message to retry");
+                }
+                return;
+            }
+
+            let threadSlug = currentThreadSlug;
+            if (!threadSlug) {
+                threadSlug = await handleNewThread();
+                if (!threadSlug) {
+                    toast.error("Failed to create chat thread");
+                    return;
+                }
+            }
+
+            onSendMessage(messageToRetry, threadSlug, []);
             return;
         }
 
-        try {
-            const jsonContent = jsonMatch[1].trim();
-            await navigator.clipboard.writeText(jsonContent);
-            setCopiedJsonId(messageId);
-            toast.success("JSON copied to clipboard");
-            setTimeout(() => setCopiedJsonId(null), 2000);
-        } catch (error) {
-            console.error("Failed to copy JSON:", error);
-            toast.error("Failed to copy JSON to clipboard");
+        const userMessage = chatMessages[userMessageIndex];
+        const messageToRetry = userMessage.content;
+
+        if (!messageToRetry.trim() || isLoading) {
+            return;
         }
+
+        let threadSlug = currentThreadSlug;
+        if (!threadSlug) {
+            threadSlug = await handleNewThread();
+            if (!threadSlug) {
+                toast.error("Failed to create chat thread");
+                return;
+            }
+        }
+
+        onSendMessage(messageToRetry, threadSlug, []);
     };
 
     const handleSendMessage = async () => {
@@ -1093,18 +1120,6 @@ export default function WorkspaceChat({
                 </div>
             )}
 
-            {/* Persona Badge */}
-            <div className="p-3 border-b border-[#0E2E33]">
-                <div className="flex items-center gap-2 bg-[#0E2E33] px-3 py-2 rounded-md">
-                    <Bot className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm font-medium text-white">
-                        The Architect
-                    </span>
-                    <span className="ml-2 text-xs text-gray-400">
-                        SOW generation
-                    </span>
-                </div>
-            </div>
 
             {/* Chat Messages - Scrollable Area */}
             <ScrollArea className="flex-1 overflow-hidden">
@@ -1253,11 +1268,11 @@ export default function WorkspaceChat({
                                             {/* 🎯 Action buttons for assistant messages */}
                                             {msg.role === "assistant" && (
                                                 <div className="flex gap-1.5 items-center">
-                                                    {/* Copy Prose Button */}
+                                                    {/* Universal Copy Button */}
                                                     <button
-                                                        onClick={() => handleCopyProse(msg.content, msg.id)}
+                                                        onClick={() => handleCopyResponse(msg.content, msg.id)}
                                                         className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
-                                                        title="Copy prose content"
+                                                        title="Copy response"
                                                     >
                                                         {copiedMessageId === msg.id ? (
                                                             <Check className="w-3.5 h-3.5 text-green-400" />
@@ -1266,20 +1281,15 @@ export default function WorkspaceChat({
                                                         )}
                                                     </button>
                                                     
-                                                    {/* Copy JSON Button (only if JSON exists) */}
-                                                    {/```json/i.test(msg.content) && (
-                                                        <button
-                                                            onClick={() => handleCopyJSON(msg.content, msg.id)}
-                                                            className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
-                                                            title="Copy JSON block"
-                                                        >
-                                                            {copiedJsonId === msg.id ? (
-                                                                <Check className="w-3.5 h-3.5 text-green-400" />
-                                                            ) : (
-                                                                <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
-                                                            )}
-                                                        </button>
-                                                    )}
+                                                    {/* Regenerate Response Button */}
+                                                    <button
+                                                        onClick={() => handleRegenerateResponse(msg.id)}
+                                                        disabled={isLoading}
+                                                        className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        title="Regenerate response"
+                                                    >
+                                                        <RotateCcw className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
+                                                    </button>
                                                 </div>
                                             )}
                                             
@@ -1616,91 +1626,84 @@ export default function WorkspaceChat({
                 )}
 
                 {/* Chat Input */}
-                <div className="flex gap-3">
-                    <div className="flex-1 space-y-2">
-                        <div className="relative">
-                            <Textarea
-                                ref={chatInputRef}
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                onKeyPress={handleKeyPress}
-                                placeholder="Type /help for commands..."
-                                className="min-h-[50px] max-h-[150px] resize-none text-sm bg-[#0E2E33] border-[#0E2E33] text-white placeholder:text-gray-400 rounded-lg pr-12"
-                            />
+                <div className="flex gap-2 items-end">
+                    {/* File attachment input (for inline attachments) */}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        accept="image/*,.pdf,.txt,.doc,.docx"
+                    />
 
-                            {/* Enhance button - positioned inside textarea */}
-                            <button
-                                onClick={handleEnhanceOnly}
-                                disabled={
-                                    !chatInput.trim() || isLoading || enhancing
-                                }
-                                className="absolute right-3 top-3 p-1.5 rounded-md bg-[#1b1b1e] hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-[#1CBF79]/30 hover:border-[#1CBF79]/60"
-                                title="Enhance your prompt with AI"
-                            >
-                                {enhancing ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1CBF79]" />
-                                ) : (
-                                    <span className="text-[#1CBF79] text-sm">
-                                        ✨
-                                    </span>
-                                )}
-                            </button>
-                        </div>
+                    {/* Document upload input (for workspace document upload) - Multiple files */}
+                    <input
+                        ref={documentUploadInputRef}
+                        type="file"
+                        multiple
+                        onChange={handleDocumentUpload}
+                        className="hidden"
+                        accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+                        disabled={uploading}
+                    />
 
-                        <div className="flex gap-2 mt-2">
-                            {/* File attachment input (for inline attachments) */}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                onChange={handleFileSelect}
-                                className="hidden"
-                                accept="image/*,.pdf,.txt,.doc,.docx"
-                            />
+                    <div className="flex-1 relative">
+                        <Textarea
+                            ref={chatInputRef}
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                            placeholder="Type /help for commands..."
+                            className="min-h-[50px] max-h-[150px] resize-none text-sm bg-[#0E2E33] border-[#0E2E33] text-white placeholder:text-gray-400 rounded-lg pr-24 pl-10"
+                        />
 
-                            {/* Document upload input (for workspace document upload) - Multiple files */}
-                            <input
-                                ref={documentUploadInputRef}
-                                type="file"
-                                multiple
-                                onChange={handleDocumentUpload}
-                                className="hidden"
-                                accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
-                                disabled={uploading}
-                            />
+                        {/* File attachment icon - positioned inside textarea on the left */}
+                        <button
+                            onClick={handleDocumentUploadClick}
+                            disabled={uploading || (!editorWorkspaceSlug && !onFileUpload)}
+                            className="absolute left-3 bottom-3 p-1.5 rounded-md hover:bg-[#1b5e5e]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            title="Upload document to workspace (PDF, Word, Text)"
+                        >
+                            {uploading ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                            ) : (
+                                <Paperclip className="h-4 w-4 text-gray-400 hover:text-white" />
+                            )}
+                        </button>
 
-                            {/* Document upload button */}
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-12 w-12 p-0 border border-[#0E2E33] hover:bg-[#1b1b1e]"
-                                onClick={handleDocumentUploadClick}
-                                disabled={uploading || (!editorWorkspaceSlug && !onFileUpload)}
-                                title="Upload document to workspace (PDF, Word, Text)"
-                            >
-                                {uploading ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                ) : (
-                                    <Paperclip className="h-5 w-5" />
-                                )}
-                            </Button>
+                        {/* Enhance button - positioned inside textarea on the right */}
+                        <button
+                            onClick={handleEnhanceOnly}
+                            disabled={
+                                !chatInput.trim() || isLoading || enhancing
+                            }
+                            className="absolute right-12 bottom-3 p-1.5 rounded-md bg-[#1b1b1e] hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-[#1CBF79]/30 hover:border-[#1CBF79]/60"
+                            title="Enhance your prompt with AI"
+                        >
+                            {enhancing ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1CBF79]" />
+                            ) : (
+                                <span className="text-[#1CBF79] text-sm">
+                                    ✨
+                                </span>
+                            )}
+                        </button>
 
-                            {/* Send button - fixed width, professional */}
-                            <Button
-                                onClick={handleSendMessage}
-                                disabled={!chatInput.trim() || isLoading}
-                                size="sm"
-                                className="w-auto max-w-[200px] bg-[#15a366] hover:bg-[#10a35a] active:bg-[#0d8f4d] text-white h-12 px-6 font-semibold border-0 text-base transition-all duration-200 shadow-sm hover:shadow-md"
-                                title="Send message to The Architect"
-                            >
-                                {isLoading ? (
-                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                ) : (
-                                    <Send className="h-5 w-5 mr-2" />
-                                )}
-                                {isLoading ? "Generating..." : "Send"}
-                            </Button>
-                        </div>
+                        {/* Send button - positioned inline on the right */}
+                        <Button
+                            onClick={handleSendMessage}
+                            disabled={!chatInput.trim() || isLoading}
+                            size="sm"
+                            className="absolute right-2 bottom-2 bg-[#15a366] hover:bg-[#10a35a] active:bg-[#0d8f4d] text-white h-9 px-4 font-semibold border-0 text-sm transition-all duration-200 shadow-sm hover:shadow-md"
+                            title="Send message to The Architect"
+                        >
+                            {isLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Send className="h-4 w-4" />
+                            )}
+                        </Button>
                     </div>
                 </div>
             </div>
