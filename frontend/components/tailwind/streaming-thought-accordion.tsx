@@ -173,9 +173,9 @@ export function StreamingThoughtAccordion({
             <span className="text-xs text-gray-400 ml-auto">Pricing Data</span>
           </summary>
           <div className="px-4 py-3 bg-[#000000]/50 border-t border-[#20e28f]/30">
-            <div className="rounded-md bg-[#1e1e1e] border border-gray-800 overflow-hidden my-2">
-              <div className="overflow-x-auto p-4">
-                <code className="block text-sm font-mono text-gray-300 whitespace-pre-wrap break-words">
+            <div className="rounded-md bg-gray-950 border border-gray-800 my-2 max-h-64 overflow-y-auto scrollbar-thin">
+              <div className="p-4">
+                <code className="block text-xs font-mono text-gray-300 whitespace-pre-wrap break-all">
                   {JSON.stringify(jsonBlock, null, 2)}
                 </code>
               </div>
@@ -200,7 +200,7 @@ export function StreamingThoughtAccordion({
             <span>Thinking Process</span>
             <ChevronDown className="w-4 h-4 ml-auto transition-transform group-open:rotate-180 text-gray-400" />
           </summary>
-          <div className="px-4 py-3 bg-black/20 border-t border-white/5">
+          <div className="px-4 py-3 bg-black/20 border-t border-white/5 max-h-64 overflow-y-auto scrollbar-thin">
             <MemoizedMarkdown content={displayedThinking} />
             {isStreaming && displayedThinking.length < thinking.length && (
               <span className="animate-pulse text-purple-500 inline-block ml-1">▋</span>
@@ -257,9 +257,9 @@ export function StreamingThoughtAccordion({
                 <span className="text-xs text-gray-400 ml-auto">Click to expand</span>
               </summary>
               <div className="px-4 py-3 bg-[#000000]/50 border-t border-[#20e28f]/30 space-y-3">
-                <div className="rounded-md bg-[#1e1e1e] border border-gray-800 overflow-hidden my-2">
-                  <div className="overflow-x-auto p-4">
-                    <code className="block text-sm font-mono text-gray-300 whitespace-pre-wrap break-words">
+                <div className="rounded-md bg-gray-950 border border-gray-800 overflow-hidden my-2 max-h-64 overflow-y-auto scrollbar-thin">
+                  <div className="p-4">
+                    <code className="block text-xs font-mono text-gray-300 whitespace-pre-wrap break-all">
                       {JSON.stringify(jsonBlock, null, 2)}
                     </code>
                   </div>

@@ -1122,7 +1122,7 @@ export default function WorkspaceChat({
 
 
             {/* Chat Messages - Scrollable Area */}
-            <ScrollArea className="flex-1 overflow-hidden [&>div]:scrollbar-thin">
+            <ScrollArea className="flex-1 min-h-0 overflow-hidden [&>div]:scrollbar-thin">
                 <div className="p-5">
                     {!showAllMessages && chatMessages.length > MAX_MESSAGES && (
                         <div className="flex items-center justify-between text-xs text-gray-400 bg-[#0E2E33] border border-[#1b5e5e] px-3 py-2 rounded">
