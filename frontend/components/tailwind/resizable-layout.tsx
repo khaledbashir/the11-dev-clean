@@ -82,14 +82,14 @@ export function ResizableLayout({
   return (
     <div className="h-screen w-screen flex flex-col relative">
       {/* PERSISTENT LEFT SIDEBAR TOGGLE TAB - ALWAYS VISIBLE */}
-      {!sidebarOpen && (
+      {!sidebarOpen && onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
-          className="fixed left-0 top-20 z-40 bg-[#1CBF79] hover:bg-[#15a366] text-black p-2 rounded-r-lg transition-all duration-300 shadow-lg"
+          className="fixed left-0 top-20 z-40 bg-[#1CBF79] hover:bg-[#15a366] text-black p-2.5 md:p-2 rounded-r-lg transition-all duration-300 shadow-lg hover:shadow-xl active:scale-95"
           title="Open sidebar"
           aria-label="Open sidebar"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-5 h-5 md:w-4 md:h-4" />
         </button>
       )}
 
@@ -109,8 +109,8 @@ export function ResizableLayout({
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT SIDEBAR - FIXED WIDTH OR 0 */}
         <div 
-          className={`h-full overflow-y-auto overflow-x-hidden flex-shrink-0 border-r border-gray-700 transition-all duration-300 ${
-            sidebarOpen ? 'w-80' : 'w-0 border-r-0'
+          className={`h-full overflow-y-auto overflow-x-hidden flex-shrink-0 border-r border-gray-700 transition-all duration-300 ease-in-out ${
+            sidebarOpen ? 'w-80 md:w-72' : 'w-0 border-r-0'
           }`}
         >
           {sidebarOpen && leftPanel}

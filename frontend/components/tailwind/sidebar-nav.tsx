@@ -20,6 +20,8 @@ import {
   GripVertical,
   Settings,
   CheckCircle2,
+  Menu,
+  X,
 } from "lucide-react";
 import {
   DndContext,
@@ -91,6 +93,7 @@ interface SidebarNavProps {
   onDeleteDocument?: (id: string) => void;
   onMoveDocument?: (documentId: string, fromFolderId: string | null, toFolderId: string | null) => void;
   onToggleSidebar?: () => void;
+  sidebarOpen?: boolean;
 }
 
 export default function SidebarNav({
@@ -126,6 +129,7 @@ export default function SidebarNav({
   onDeleteDocument,
   onMoveDocument,
   onToggleSidebar,
+  sidebarOpen = true,
 }: SidebarNavProps) {
   // Map new props to old props for backward compatibility
   // Ensure we always have an array, even if props are undefined
@@ -668,15 +672,19 @@ export default function SidebarNav({
 
   return (
     <div className="w-80 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container">
-      {/* COLLAPSE BUTTON - Top Right Corner */}
+      {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner */}
       {onToggleSidebar && (
         <button
           onClick={onToggleSidebar}
-          className="absolute top-4 right-4 p-1 hover:bg-gray-800 rounded transition-colors text-gray-400 hover:text-gray-300 z-10"
-          title="Collapse sidebar"
-          aria-label="Collapse sidebar"
+          className="absolute top-4 right-4 p-2.5 hover:bg-gray-800 rounded-lg transition-all duration-200 text-gray-400 hover:text-white z-10 shadow-md hover:shadow-lg active:scale-95 md:p-2 md:top-3 md:right-3"
+          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
-          <ChevronLeft className="w-5 h-5" />
+          {sidebarOpen ? (
+            <Menu className="w-5 h-5 md:w-4 md:h-4" />
+          ) : (
+            <ChevronRight className="w-5 h-5 md:w-4 md:h-4" />
+          )}
         </button>
       )}
 

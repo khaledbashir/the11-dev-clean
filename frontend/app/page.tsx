@@ -2333,6 +2333,8 @@ export default function Page() {
                         }}
                         onDeleteWorkspace={handleDeleteWorkspace}
                         onCreateSOW={handleCreateSOW}
+                        sidebarOpen={sidebarOpen}
+                        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
                     />
                 }
                 mainPanel={
