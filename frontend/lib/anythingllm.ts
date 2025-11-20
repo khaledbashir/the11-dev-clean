@@ -1430,23 +1430,22 @@ You have access to the full SOW document that has been embedded in this workspac
     /**
      * Chat with OpenAI compatible endpoint (Transient Injection)
      * Bypasses RAG/Vector DB for direct context injection
+     * 
+     * NOTE: The 'model' parameter in AnythingLLM's OpenAI-compatible endpoint
+     * must be a workspace slug, not an actual model name.
      */
     async chatWithOpenAI(
         messages: Array<{ role: string; content: string }>,
-        model: string = "glm-4.6", // Default model preference
+        workspaceSlug: string = "gen-the-architect", // Default workspace (model parameter)
         temperature: number = 0.7
     ): Promise<string | null> {
         try {
             // Use the OpenAI compatible endpoint provided by AnythingLLM
             const endpoint = `${this.baseUrl}/api/v1/openai/chat/completions`;
             
-            // Prefer environment variable model if available
-            // Note: Check both server and client side env vars
-            const preferredModel = (typeof process !== 'undefined' && process.env.OPENROUTER_MODEL_PREF) 
-                ? process.env.OPENROUTER_MODEL_PREF 
-                : (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_OPENROUTER_MODEL_PREF)
-                    ? process.env.NEXT_PUBLIC_OPENROUTER_MODEL_PREF
-                    : model;
+            // The 'model' parameter must be a workspace slug, not a model name
+            // Default to 'gen-the-architect' which is the master SOW generation workspace
+            const workspaceModel = workspaceSlug || "gen-the-architect";
 
             // Get API key - always check environment variable first to ensure fresh value
             // This fixes timing issues where the instance key might be stale or invalid
@@ -1489,7 +1488,7 @@ You have access to the full SOW document that has been embedded in this workspac
             }
 
             console.log(`🤖 Calling OpenAI compatible endpoint: ${endpoint}`);
-            console.log(`   Model: ${preferredModel}`);
+            console.log(`   Workspace (model param): ${workspaceModel}`);
             console.log(`   API Key: ${apiKey ? `${apiKey.substring(0, 8)}...` : 'MISSING'}`);
             
             // Helper function to make the API call
@@ -1501,7 +1500,7 @@ You have access to the full SOW document that has been embedded in this workspac
                         "Authorization": `Bearer ${keyToUse}`,
                     },
                     body: JSON.stringify({
-                        model: preferredModel,
+                        model: workspaceModel, // Must be workspace slug, not model name
                         messages,
                         temperature,
                         stream: false, // Explicitly request non-streaming response
@@ -1539,35 +1538,79 @@ You have access to the full SOW document that has been embedded in this workspac
             }
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`❌ OpenAI API call failed: ${response.status} ${errorText}`);
+                // Capture response headers for debugging
+                const responseHeaders: Record<string, string> = {};
+                response.headers.forEach((value, key) => {
+                    responseHeaders[key] = value;
+                });
+                
+                // Try to read error body, but handle empty responses
+                let errorText = '';
+                let errorJson: any = null;
+                try {
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('application/json')) {
+                        errorText = await response.text();
+                        if (errorText) {
+                            try {
+                                errorJson = JSON.parse(errorText);
+                            } catch (e) {
+                                // Not JSON, keep as text
+                            }
+                        }
+                    } else {
+                        errorText = await response.text();
+                    }
+                } catch (e) {
+                    console.warn(`⚠️ Could not read error response body:`, e);
+                }
+                
+                console.error(`❌ OpenAI API call failed: ${response.status} ${response.statusText}`);
+                if (errorText) {
+                    console.error(`❌ Error body:`, errorText);
+                }
                 
                 // Log detailed error for 401 to help debug
                 if (response.status === 401) {
-                    console.error(`🔑 [401 Error] API Key status after retry:`, {
-                        hasApiKey: !!apiKey,
-                        apiKeyPrefix: apiKey ? apiKey.substring(0, 8) : 'N/A',
-                        apiKeyLength: apiKey ? apiKey.length : 0,
+                    console.error(`🔑 [401 Error] Detailed Authentication Failure:`, {
+                        status: response.status,
+                        statusText: response.statusText,
                         endpoint: endpoint,
+                        apiKeyStatus: {
+                            hasApiKey: !!apiKey,
+                            apiKeyPrefix: apiKey ? apiKey.substring(0, 8) : 'N/A',
+                            apiKeyLength: apiKey ? apiKey.length : 0,
+                            apiKeyFormat: apiKey ? (apiKey.startsWith('sk-') ? 'sk-*' : apiKey.startsWith('Bearer ') ? 'Bearer *' : 'other') : 'N/A',
+                        },
+                        responseHeaders: responseHeaders,
+                        wwwAuthenticate: responseHeaders['www-authenticate'] || 'Not provided',
+                        errorBody: errorJson || errorText || 'Empty response',
                     });
                     
-                    // Try to parse error message for more details
-                    try {
-                        const errorJson = JSON.parse(errorText);
-                        console.error(`🔑 [401 Error] Server response:`, errorJson);
-                    } catch (e) {
-                        console.error(`🔑 [401 Error] Raw error text:`, errorText);
+                    // Check for WWW-Authenticate header which often contains auth error details
+                    const wwwAuth = responseHeaders['www-authenticate'];
+                    if (wwwAuth) {
+                        console.error(`🔑 [401 Error] WWW-Authenticate header: ${wwwAuth}`);
                     }
                     
                     // Log detailed error and return null (caller should handle)
                     console.error(`🔑 [401 Error] Authentication failed. Please verify NEXT_PUBLIC_ANYTHINGLLM_API_KEY is set correctly in your environment variables.`);
                     console.error(`🔑 [401 Error] Endpoint: ${endpoint}`);
-                    console.error(`🔑 [401 Error] Error response: ${errorText}`);
+                    if (errorJson) {
+                        console.error(`🔑 [401 Error] Server error JSON:`, errorJson);
+                    } else if (errorText) {
+                        console.error(`🔑 [401 Error] Server error text: ${errorText}`);
+                    } else {
+                        console.error(`🔑 [401 Error] Server returned empty response body`);
+                    }
                     return null;
                 }
                 
                 // For other errors, log and return null
-                console.error(`❌ [API Error] Status ${response.status}: ${errorText}`);
+                console.error(`❌ [API Error] Status ${response.status}: ${errorText || response.statusText}`);
+                if (errorJson) {
+                    console.error(`❌ [API Error] Error details:`, errorJson);
+                }
                 return null;
             }
 
