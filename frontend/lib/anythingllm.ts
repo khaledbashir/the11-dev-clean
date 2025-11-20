@@ -1445,13 +1445,25 @@ You have access to the full SOW document that has been embedded in this workspac
                     ? process.env.NEXT_PUBLIC_OPENROUTER_MODEL_PREF
                     : model;
 
-            // Get API key - check both client-side and server-side env vars
-            const apiKey = this.apiKey || 
-                (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY) ||
-                (typeof process !== 'undefined' && process.env.ANYTHINGLLM_API_KEY);
+            // Get API key - ensure we always have a valid key
+            // Check instance property first (from constructor), then fall back to env vars
+            let apiKey = this.apiKey;
+            
+            // If instance key is missing or undefined, try env vars (client-side accessible)
+            if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+                if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY) {
+                    apiKey = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
+                    // Update instance for next call
+                    this.apiKey = apiKey;
+                } else if (typeof process !== 'undefined' && process.env.ANYTHINGLLM_API_KEY) {
+                    // Server-side only fallback (won't work in browser but good for SSR)
+                    apiKey = process.env.ANYTHINGLLM_API_KEY;
+                    this.apiKey = apiKey;
+                }
+            }
 
-            if (!apiKey) {
-                console.error(`❌ Missing API key for OpenAI endpoint. Check NEXT_PUBLIC_ANYTHINGLLM_API_KEY or ANYTHINGLLM_API_KEY environment variable.`);
+            if (!apiKey || apiKey === 'undefined' || apiKey === '') {
+                console.error(`❌ Missing API key for OpenAI endpoint. Check NEXT_PUBLIC_ANYTHINGLLM_API_KEY environment variable.`);
                 return null;
             }
 
@@ -1469,17 +1481,102 @@ You have access to the full SOW document that has been embedded in this workspac
                     model: preferredModel,
                     messages,
                     temperature,
+                    stream: false, // Explicitly request non-streaming response
                 }),
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error(`❌ OpenAI API call failed: ${response.status} ${errorText}`);
+                
+                // Log detailed error for 401 to help debug
+                if (response.status === 401) {
+                    console.error(`🔑 [401 Error] API Key status:`, {
+                        hasApiKey: !!apiKey,
+                        apiKeyPrefix: apiKey ? apiKey.substring(0, 8) : 'N/A',
+                        apiKeyLength: apiKey ? apiKey.length : 0,
+                    });
+                }
+                
                 return null;
             }
 
-            const data = await response.json();
-            return data.choices?.[0]?.message?.content || null;
+            // Check content-type to handle both streaming and JSON responses
+            const contentType = response.headers.get("content-type") || "";
+            
+            if (contentType.includes("text/event-stream") || contentType.includes("stream")) {
+                // Handle streaming response (SSE format)
+                console.log(`📡 Streaming response detected, parsing SSE format...`);
+                const reader = response.body?.getReader();
+                if (!reader) {
+                    console.error(`❌ No reader available for streaming response`);
+                    return null;
+                }
+
+                const decoder = new TextDecoder();
+                let fullContent = "";
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (line.trim() && line.startsWith("data: ")) {
+                            const dataStr = line.slice(6).trim();
+                            if (dataStr === "[DONE]") continue;
+                            
+                            try {
+                                const data = JSON.parse(dataStr);
+                                
+                                // Handle different response formats
+                                if (data.choices?.[0]?.delta?.content) {
+                                    // OpenAI streaming format
+                                    fullContent += data.choices[0].delta.content;
+                                } else if (data.textResponse) {
+                                    // AnythingLLM streaming format
+                                    fullContent += data.textResponse;
+                                } else if (data.choices?.[0]?.message?.content) {
+                                    // Complete message in streaming format
+                                    fullContent = data.choices[0].message.content;
+                                }
+                            } catch (e) {
+                                // Ignore JSON parse errors for non-JSON chunks
+                            }
+                        }
+                    }
+                }
+
+                if (fullContent) {
+                    console.log(`✅ Parsed streaming response: ${fullContent.length} characters`);
+                    return fullContent;
+                }
+                
+                console.warn(`⚠️ No content extracted from streaming response`);
+                return null;
+            } else {
+                // Handle JSON response
+                console.log(`📦 JSON response detected`);
+                const data = await response.json();
+                
+                // Handle different response formats
+                const content = data.choices?.[0]?.message?.content || 
+                               data.textResponse || 
+                               data.response ||
+                               null;
+                
+                if (content) {
+                    console.log(`✅ Parsed JSON response: ${content.length} characters`);
+                    return content;
+                }
+                
+                console.warn(`⚠️ No content found in JSON response:`, data);
+                return null;
+            }
         } catch (error) {
             console.error("❌ Error calling OpenAI endpoint:", error);
             return null;
