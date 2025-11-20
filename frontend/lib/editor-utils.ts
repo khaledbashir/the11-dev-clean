@@ -24,12 +24,13 @@ export function convertMarkdownToNovelJSON(
 
   const content: any[] = [];
 
-  // Step 1: Extract JSON code blocks (```json ... ```) and convert to pricing tables
+  // Step 1: Extract JSON code blocks (```json ... ```) and raw JSON objects
   const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/gi;
   const jsonMatches: Array<{ match: string; json: any; index: number }> = [];
   let match;
   let lastIndex = 0;
 
+  // First, look for JSON in code blocks
   while ((match = jsonBlockRegex.exec(markdown)) !== null) {
     try {
       const jsonData = JSON.parse(match[1]);
@@ -40,6 +41,30 @@ export function convertMarkdownToNovelJSON(
       });
     } catch (e) {
       console.warn("⚠️ [Editor Utils] Failed to parse JSON block:", e);
+    }
+  }
+
+  // 🎯 FIX: Also detect raw JSON objects (not in code blocks) - common when AI outputs JSON directly
+  if (jsonMatches.length === 0) {
+    // Look for JSON objects that start with { and contain scope_name or scopes
+    const rawJsonPattern = /\{[\s\S]*?(?:"scope_name"|"scopes"|"role_allocation"|"roles")[\s\S]*?\}/g;
+    let rawMatch;
+    while ((rawMatch = rawJsonPattern.exec(markdown)) !== null) {
+      try {
+        const jsonData = JSON.parse(rawMatch[0]);
+        // Validate it's actually pricing JSON (has scope_name, scopes, or roles)
+        if (jsonData.scope_name || jsonData.scopes || jsonData.roles || jsonData.role_allocation) {
+          jsonMatches.push({
+            match: rawMatch[0],
+            json: jsonData,
+            index: rawMatch.index,
+          });
+          console.log("✅ [Editor Utils] Detected raw JSON object (not in code block)");
+          break; // Only process first valid JSON found
+        }
+      } catch (e) {
+        // Not valid JSON, continue
+      }
     }
   }
 
