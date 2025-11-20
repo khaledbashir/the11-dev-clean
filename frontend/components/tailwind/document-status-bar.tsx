@@ -64,24 +64,24 @@ export function DocumentStatusBar({
     const IconComponent = config.icon;
 
     return (
-        <div className="h-14 bg-[#0E0F0F] border-b border-[#2A2A2D] flex items-center justify-between px-6 flex-shrink-0">
+        <div className="h-14 bg-[#0E0F0F] border-b border-[#2A2A2D] flex items-center justify-between px-3 sm:px-6 flex-shrink-0 overflow-hidden">
             {/* Title */}
-            <h2 className="text-lg font-semibold text-white truncate">
-                {title}
-            </h2>
+            <div className="flex-1 min-w-0 mr-4">
+                <h2 className="text-base sm:text-lg font-semibold text-white truncate">
+                    {title}
+                </h2>
+            </div>
 
-            {/* Actions Section */}
-            <div className="flex items-center gap-3">
-                {/* Vertical/Service selects removed as per user preference */}
-
-                {/* Export Buttons */}
-                <div className="flex items-center gap-2">
+            {/* Actions Section - Responsive with overflow handling */}
+            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0 overflow-x-auto scrollbar-hide">
+                {/* Export Buttons - Responsive layout */}
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                     {onToggleGrandTotal && (
                         <Button
                             onClick={onToggleGrandTotal}
                             variant="outline"
                             size="sm"
-                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors"
+                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors whitespace-nowrap"
                             title={
                                 isGrandTotalVisible
                                     ? "Hide combined total"
@@ -90,13 +90,13 @@ export function DocumentStatusBar({
                         >
                             {isGrandTotalVisible ? (
                                 <>
-                                    <EyeOff className="w-4 h-4 mr-2" />
-                                    Hide Total
+                                    <EyeOff className="w-4 h-4 sm:mr-2" />
+                                    <span className="hidden sm:inline">Hide Total</span>
                                 </>
                             ) : (
                                 <>
-                                    <Eye className="w-4 h-4 mr-2" />
-                                    Show Total
+                                    <Eye className="w-4 h-4 sm:mr-2" />
+                                    <span className="hidden sm:inline">Show Total</span>
                                 </>
                             )}
                         </Button>
@@ -107,10 +107,11 @@ export function DocumentStatusBar({
                             onClick={onExportPDF}
                             variant="outline"
                             size="sm"
-                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors"
+                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors whitespace-nowrap"
+                            title="Export PDF"
                         >
-                            <Download className="w-4 h-4 mr-2" />
-                            Export PDF
+                            <Download className="w-4 h-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Export PDF</span>
                         </Button>
                     )}
 
@@ -119,10 +120,11 @@ export function DocumentStatusBar({
                             onClick={onExportNewPDF}
                             variant="outline"
                             size="sm"
-                            className="bg-[#1A1A1D] hover:bg-green-600 text-green-400 hover:text-white border-green-600 transition-colors"
+                            className="bg-[#1A1A1D] hover:bg-green-600 text-green-400 hover:text-white border-green-600 transition-colors whitespace-nowrap"
+                            title="Export Professional PDF"
                         >
-                            <FilePlus className="w-4 h-4 mr-2" />
-                            Export Professional PDF
+                            <FilePlus className="w-4 h-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Export Professional PDF</span>
                         </Button>
                     )}
 
@@ -132,10 +134,11 @@ export function DocumentStatusBar({
                             onClick={onExportExcel}
                             variant="outline"
                             size="sm"
-                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors"
+                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors whitespace-nowrap"
+                            title="Export Excel"
                         >
-                            <FileSpreadsheet className="w-4 h-4 mr-2" />
-                            Export Excel
+                            <FileSpreadsheet className="w-4 h-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Export Excel</span>
                         </Button>
                     )}
 
@@ -144,40 +147,41 @@ export function DocumentStatusBar({
                             onClick={onSharePortal}
                             variant="outline"
                             size="sm"
-                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors"
+                            className="bg-[#1A1A1D] hover:bg-[#2A2A2D] text-gray-300 hover:text-white border-[#2A2A2D] transition-colors whitespace-nowrap"
+                            title="Share Portal"
                         >
-                            <Share2 className="w-4 h-4 mr-2" />
-                            Share Portal
+                            <Share2 className="w-4 h-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Share Portal</span>
                         </Button>
                     )}
                 </div>
 
-                {/* Separator */}
+                {/* Separator - Hidden on mobile */}
                 {(onExportPDF || onExportExcel || onSharePortal) &&
                     (onSave || saveStatus) && (
-                        <div className="h-6 w-px bg-[#2A2A2D]"></div>
+                        <div className="hidden sm:block h-6 w-px bg-[#2A2A2D] flex-shrink-0"></div>
                     )}
 
-                {/* Status Indicator */}
+                {/* Status Indicator - Responsive */}
                 <div
-                    className={`flex items-center gap-2 px-3 py-1 rounded ${config.bgColor}`}
+                    className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 rounded ${config.bgColor} flex-shrink-0`}
                 >
                     <IconComponent
                         className={`w-4 h-4 ${config.color} ${
                             saveStatus === "saving" ? "animate-spin" : ""
                         }`}
                     />
-                    <span className={`text-sm font-medium ${config.color}`}>
+                    <span className={`text-xs sm:text-sm font-medium ${config.color} hidden sm:inline`}>
                         {config.text}
                     </span>
                 </div>
 
-                {/* Save Button */}
+                {/* Save Button - Responsive */}
                 {onSave && (
                     <Button
                         onClick={onSave}
                         disabled={saveStatus === "saved" || isSaving}
-                        className={`text-white font-semibold transition-all ${
+                        className={`text-white font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
                             saveStatus === "saved" || isSaving
                                 ? "bg-gray-700 hover:bg-gray-700 text-gray-400 cursor-not-allowed"
                                 : "bg-[#1CBF79] hover:bg-[#15a366]"
@@ -186,11 +190,11 @@ export function DocumentStatusBar({
                     >
                         {isSaving ? (
                             <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Saving
+                                <Loader2 className="w-4 h-4 sm:mr-2 animate-spin" />
+                                <span className="hidden sm:inline">Saving</span>
                             </>
                         ) : (
-                            "Save"
+                            <span className="px-1 sm:px-0">Save</span>
                         )}
                     </Button>
                 )}
