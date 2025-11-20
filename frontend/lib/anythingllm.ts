@@ -1548,9 +1548,26 @@ You have access to the full SOW document that has been embedded in this workspac
                         hasApiKey: !!apiKey,
                         apiKeyPrefix: apiKey ? apiKey.substring(0, 8) : 'N/A',
                         apiKeyLength: apiKey ? apiKey.length : 0,
+                        endpoint: endpoint,
                     });
+                    
+                    // Try to parse error message for more details
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        console.error(`🔑 [401 Error] Server response:`, errorJson);
+                    } catch (e) {
+                        console.error(`🔑 [401 Error] Raw error text:`, errorText);
+                    }
+                    
+                    // Log detailed error and return null (caller should handle)
+                    console.error(`🔑 [401 Error] Authentication failed. Please verify NEXT_PUBLIC_ANYTHINGLLM_API_KEY is set correctly in your environment variables.`);
+                    console.error(`🔑 [401 Error] Endpoint: ${endpoint}`);
+                    console.error(`🔑 [401 Error] Error response: ${errorText}`);
+                    return null;
                 }
                 
+                // For other errors, log and return null
+                console.error(`❌ [API Error] Status ${response.status}: ${errorText}`);
                 return null;
             }
 

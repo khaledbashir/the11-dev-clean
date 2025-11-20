@@ -268,6 +268,12 @@ export function useChatManager({
             
             const response = await anythingLLM.chatWithOpenAI(messages);
             
+            if (!response) {
+                console.error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
+                toast.error("Authentication failed. Please check your AnythingLLM API key configuration.");
+                return;
+            }
+            
             if (response) {
                 const aiMsg: ChatMessage = {
                     id: `msg${Date.now()}-ai`,
@@ -477,6 +483,12 @@ export function useChatManager({
              
              try {
                  const response = await anythingLLM.chatWithOpenAI(messages);
+                 
+                 if (!response) {
+                     console.error("❌ [Chat Manager] chatWithOpenAI returned null - likely authentication error");
+                     toast.error("Authentication failed. Please check your AnythingLLM API key configuration.");
+                     return;
+                 }
                  
                  if (response) {
                      const aiMsg: ChatMessage = {
