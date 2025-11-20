@@ -37,7 +37,13 @@ export async function POST(req: NextRequest) {
 
     let text = '';
 
-    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    // Check file type
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                   file.name.toLowerCase().endsWith('.docx');
+    const isDoc = file.type === 'application/msword' || file.name.toLowerCase().endsWith('.doc');
+
+    if (isPDF) {
       console.log("📑 [API] Processing PDF file...");
       
       try {
@@ -62,7 +68,7 @@ export async function POST(req: NextRequest) {
         }
         
         text = data.text;
-        console.log(`✅ [API] Extraction Success! Length: ${text.length} chars`);
+        console.log(`✅ [API] PDF Extraction Success! Length: ${text.length} chars`);
       } catch (pdfError: any) {
         console.error("❌ [API] PDF parsing error:", pdfError);
         
@@ -78,11 +84,50 @@ export async function POST(req: NextRequest) {
           error: `PDF parsing failed: ${pdfError.message || 'Unknown error'}` 
         }, { status: 500 });
       }
+    } else if (isDocx) {
+      console.log("📝 [API] Processing Word (.docx) file...");
+      
+      try {
+        // Use require inside function to avoid build-time evaluation
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const mammoth = require('mammoth');
+        
+        // Handle potentially different export formats (CJS vs ESM interop)
+        const mammothFunc = typeof mammoth === 'object' ? mammoth : mammoth.default || mammoth;
+        
+        console.log("🔧 [API] Calling mammoth to extract text...");
+        const result = await mammothFunc.extractRawText({ buffer });
+        
+        if (!result || !result.value) {
+          console.error("❌ [API] mammoth returned empty or invalid data");
+          return NextResponse.json({ error: 'Word document parsing returned no text. The file may be corrupted or empty.' }, { status: 500 });
+        }
+        
+        text = result.value;
+        console.log(`✅ [API] Word (.docx) Extraction Success! Length: ${text.length} chars`);
+        
+        // Log warnings if any
+        if (result.messages && result.messages.length > 0) {
+          console.warn("⚠️ [API] Word document parsing warnings:", result.messages);
+        }
+      } catch (docxError: any) {
+        console.error("❌ [API] Word (.docx) parsing error:", docxError);
+        
+        return NextResponse.json({ 
+          error: `Word document parsing failed: ${docxError.message || 'Unknown error'}. Please ensure the file is a valid .docx file.` 
+        }, { status: 500 });
+      }
+    } else if (isDoc) {
+      // .doc files (older binary format) are not easily parseable with standard libraries
+      // We'll return a helpful error message suggesting conversion to .docx
+      console.error(`❌ [API] Unsupported Word format: .doc (older binary format)`);
+      return NextResponse.json({ 
+        error: 'Legacy .doc files are not supported. Please convert your document to .docx format and try again. You can do this by opening the file in Microsoft Word and saving it as .docx.' 
+      }, { status: 400 });
     } else {
-      // For now only PDF is strictly required by the prompt's example
       console.error(`❌ [API] Unsupported file type: ${file.type}`);
       return NextResponse.json({ 
-        error: `Unsupported file type: ${file.type || 'unknown'}. Only PDF files are supported for context injection.` 
+        error: `Unsupported file type: ${file.type || 'unknown'}. Supported formats: PDF (.pdf) and Word (.docx) documents.` 
       }, { status: 400 });
     }
 
@@ -92,7 +137,7 @@ export async function POST(req: NextRequest) {
     if (!text || text.length === 0) {
       console.error("❌ [API] Extracted text is empty after processing");
       return NextResponse.json({ 
-        error: 'No text could be extracted from the PDF. The file may be image-only or corrupted.' 
+        error: 'No text could be extracted from the document. The file may be image-only, corrupted, or empty.' 
       }, { status: 500 });
     }
 

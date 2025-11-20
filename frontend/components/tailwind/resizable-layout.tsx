@@ -110,7 +110,7 @@ export function ResizableLayout({
         {/* LEFT SIDEBAR - FIXED WIDTH OR 0 */}
         <div 
           className={`h-full overflow-y-auto overflow-x-hidden flex-shrink-0 border-r border-gray-700 transition-all duration-300 ease-in-out ${
-            sidebarOpen ? 'w-80 md:w-72' : 'w-0 border-r-0'
+            sidebarOpen ? 'w-96 md:w-80' : 'w-0 border-r-0'
           }`}
         >
           {sidebarOpen && leftPanel}

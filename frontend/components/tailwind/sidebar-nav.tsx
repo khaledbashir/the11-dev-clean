@@ -383,7 +383,7 @@ export default function SidebarNav({
     return (
       <div ref={setNodeRef} style={style}>
         {/* Folder Item */}
-        <div className="flex items-center gap-1 px-2 py-1 hover:bg-gray-800/50 rounded-lg group relative">
+        <div className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-800/50 rounded-lg group relative min-w-0">
           {/* 🗑️ Multi-select Checkbox (only for client folders in delete mode) */}
           {isDeleteMode && !isProtectedFolder(folder) && (
             <input
@@ -418,8 +418,8 @@ export default function SidebarNav({
             )}
           </button>
 
-          {/* Folder Name (truncated to 20 chars max for better readability) */}
-          <div className="flex-1 min-w-0 max-w-[180px]">
+          {/* Folder Name - More space for longer names */}
+          <div className="flex-1 min-w-0">
             {renamingId === folder.id ? (
               <Input
                 value={renameValue}
@@ -446,14 +446,14 @@ export default function SidebarNav({
                 }`}
                 title={folder.name}
               >
-                <span className="truncate">{folder.name.length > 20 ? folder.name.substring(0, 20) + '...' : folder.name}</span>
+                <span className="truncate">{folder.name}</span>
                 <span className="ml-1 text-xs text-gray-500 flex-shrink-0">({folderDocuments.length})</span>
               </button>
             )}
           </div>
 
           {/* Action Buttons - ALWAYS VISIBLE with guaranteed space */}
-          <div className="flex gap-1.5 flex-shrink-0 ml-2">
+          <div className="flex gap-1 flex-shrink-0 ml-auto">
             {/* Add New Doc in Folder */}
             {!isDeleteMode && (
               <button
@@ -600,8 +600,8 @@ export default function SidebarNav({
           {/* Doc Icon */}
           <FileText className="w-4 h-4 flex-shrink-0" />
 
-          {/* Document Name - Clickable, max 25 chars with "..." for better readability */}
-          <div className="flex-1 min-w-0 max-w-[200px]">
+          {/* Document Name - Clickable, full width with truncation */}
+          <div className="flex-1 min-w-0">
             {renamingId === document.id ? (
               <Input
                 value={renameValue}
@@ -625,7 +625,7 @@ export default function SidebarNav({
                 className="w-full text-left text-xs hover:text-[#1CBF79] transition-colors truncate"
                 title={document.title}
               >
-                {document.title.length > 25 ? document.title.substring(0, 25) + '...' : document.title}
+                {document.title}
               </button>
             )}
           </div>
@@ -671,7 +671,7 @@ export default function SidebarNav({
   }
 
   return (
-    <div className="w-80 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible">
+    <div className="w-96 h-full bg-[#0E0F0F] border-r border-gray-800 flex flex-col relative sidebar-nav-container overflow-visible">
       {/* COLLAPSE/EXPAND TOGGLE BUTTON - Top Right Corner - ALWAYS VISIBLE */}
       {onToggleSidebar && (
         <button
