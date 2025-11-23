@@ -1,20 +1,21 @@
-# Use Node.js 18 Alpine for smaller image size and better performance
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
+# Install pnpm
+RUN npm install -g pnpm
+
 # Copy package files
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy application code
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN pnpm build
 
 # Expose the port
 EXPOSE 3000
@@ -22,9 +23,9 @@ EXPOSE 3000
 # Set environment variables
 ENV NODE_ENV=production
 
-# Health check to ensure container is running
+# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node healthcheck.js
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
