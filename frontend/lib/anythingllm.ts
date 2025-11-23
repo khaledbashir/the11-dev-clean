@@ -17,9 +17,11 @@ const ANYTHINGLLM_API_KEY =
         : process.env.ANYTHINGLLM_API_KEY) || "";
 
 // Security validation: Ensure API config is set and no hardcoded fallbacks
+// NOTE: Do NOT throw during module import/load time (build). Only warn and allow
+// callers or factory functions to decide whether to instantiate the service.
 if (!ANYTHINGLLM_BASE_URL || !ANYTHINGLLM_API_KEY) {
-    throw new Error(
-        "Security Error: AnythingLLM configuration missing. Set ANYTHINGLLM_URL and ANYTHINGLLM_API_KEY in environment.",
+    console.warn(
+        "⚠️ AnythingLLM configuration missing. Set ANYTHINGLLM_URL and ANYTHINGLLM_API_KEY in environment to enable AnythingLLM features.",
     );
 }
 
@@ -304,9 +306,13 @@ export class AnythingLLMService {
             await this.setArchitectPrompt(data.workspace.slug);
 
             // Embed the official Rate Card (Critical for SOW generation)
-            const embedded = await this.embedRateCardDocument(data.workspace.slug);
+            const embedded = await this.embedRateCardDocument(
+                data.workspace.slug,
+            );
             if (!embedded) {
-                console.warn("⚠️ Rate card embedding failed; continuing without blocking workspace creation");
+                console.warn(
+                    "⚠️ Rate card embedding failed; continuing without blocking workspace creation",
+                );
             }
 
             return { id: data.workspace.id, slug: data.workspace.slug };
@@ -2130,4 +2136,26 @@ When asked for analytics, provide clear, actionable insights with specific numbe
 }
 
 // Export singleton instance
-export const anythingLLM = new AnythingLLMService();
+/**
+ * Factory: create an AnythingLLMService instance only if environment is configured.
+ * Returns null if configuration is missing or initialization fails. This avoids
+ * build-time failures for server builds where env vars might not be provided.
+ */
+export function createAnythingLLMService(): AnythingLLMService | null {
+    if (!ANYTHINGLLM_BASE_URL || !ANYTHINGLLM_API_KEY) {
+        // Not configured, return null safely
+        return null;
+    }
+    try {
+        return new AnythingLLMService();
+    } catch (error) {
+        console.error("❌ Failed to create AnythingLLMService:", error);
+        return null;
+    }
+}
+
+/**
+ * Singleton: create once when environment is configured, otherwise null.
+ * Existing modules that previously imported `anythingLLM` can handle a null value.
+ */
+export const anythingLLM = createAnythingLLMService();

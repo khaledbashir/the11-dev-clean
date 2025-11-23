@@ -2,12 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { AnythingLLMService } from "@/lib/anythingllm";
 
-const anythingLLM = new AnythingLLMService();
-
 /**
  * RESET ALL - Complete database and AnythingLLM cleanup
  * WARNING: This deletes ALL data! Use with extreme caution.
- * 
+ *
  * Requires: { confirm: "RESET_ALL_DATA" } in body
  */
 export async function POST(request: NextRequest) {
@@ -26,6 +24,28 @@ export async function POST(request: NextRequest) {
 
         console.log("💥 Starting complete reset - deleting ALL data...");
 
+        // Lazily initialize AnythingLLMService (do NOT initialize at module-level)
+        // This prevents build-time initialization errors when env vars are not set.
+        let anythingLLM: AnythingLLMService | null = null;
+        try {
+            if (
+                process.env.ANYTHINGLLM_URL &&
+                process.env.ANYTHINGLLM_API_KEY
+            ) {
+                anythingLLM = new AnythingLLMService();
+            } else {
+                console.warn(
+                    "⚠️ AnythingLLM configuration missing; skipping workspace deletion steps.",
+                );
+            }
+        } catch (e) {
+            console.warn(
+                "⚠️ Failed to initialize AnythingLLMService; skipping workspace deletion steps.",
+                e,
+            );
+            anythingLLM = null;
+        }
+
         const results: Record<string, number> = {};
 
         // Step 1: Get all folders/workspaces before deletion
@@ -36,7 +56,7 @@ export async function POST(request: NextRequest) {
 
         // Step 2: Delete all SOW-related data first (children before parents)
         console.log("🗑️ Deleting all SOW-related data...");
-        
+
         const sowRelatedTables = [
             "sow_activities",
             "sow_comments",
@@ -76,19 +96,28 @@ export async function POST(request: NextRequest) {
                 continue;
             }
 
-            // Delete AnythingLLM workspace if it exists
+            // Delete AnythingLLM workspace if it exists (only if service is initialized)
             if (folder.workspace_slug) {
-                try {
-                    await anythingLLM.deleteWorkspace(folder.workspace_slug);
-                    deletedWorkspaceSlugs.push(folder.workspace_slug);
-                    console.log(
-                        `✅ Deleted AnythingLLM workspace: ${folder.workspace_slug}`,
-                    );
-                } catch (error: any) {
+                if (anythingLLM) {
+                    try {
+                        await anythingLLM.deleteWorkspace(
+                            folder.workspace_slug,
+                        );
+                        deletedWorkspaceSlugs.push(folder.workspace_slug);
+                        console.log(
+                            `✅ Deleted AnythingLLM workspace: ${folder.workspace_slug}`,
+                        );
+                    } catch (error: any) {
+                        console.warn(
+                            `⚠️ Failed to delete AnythingLLM workspace ${folder.workspace_slug}: ${error.message || error}`,
+                        );
+                        // Continue even if AnythingLLM deletion fails
+                    }
+                } else {
+                    // Safe fallback: log and skip deletion if AnythingLLM is not configured or failed to initialize
                     console.warn(
-                        `⚠️ Failed to delete AnythingLLM workspace ${folder.workspace_slug}: ${error.message || error}`,
+                        `⚠️ Skipping AnythingLLM deletion for workspace ${folder.workspace_slug}; configuration missing or initialization failed.`,
                     );
-                    // Continue even if AnythingLLM deletion fails
                 }
             }
 
@@ -102,7 +131,9 @@ export async function POST(request: NextRequest) {
         results.anythingllm_workspaces_deleted = deletedWorkspaceSlugs.length;
 
         // Step 5: Verify cleanup
-        const foldersAfter = await query("SELECT COUNT(*) as count FROM folders");
+        const foldersAfter = await query(
+            "SELECT COUNT(*) as count FROM folders",
+        );
         const sowsAfter = await query<{ count: number }>(
             "SELECT COUNT(*) as count FROM sows",
         );
@@ -132,4 +163,3 @@ export async function POST(request: NextRequest) {
         );
     }
 }
-
