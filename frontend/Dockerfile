@@ -28,12 +28,3 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # Start the application
 CMD ["npm", "start"]
-```
-
-Let me also create a simple healthcheck.js file:
-<tool_call>file
-<arg_key>path</arg_key>
-<arg_value>the11-dev/healthcheck.js</arg_value>
-<arg_key>mode</arg_key>
-<arg_value>create</arg_value>
-</tool_call>
