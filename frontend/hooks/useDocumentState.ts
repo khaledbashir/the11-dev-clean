@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import type { Document, Folder, Agent, Workspace, SOW, ChatMessage } from "@/lib/types/sow";
+import type {
+    Document,
+    Folder,
+    Agent,
+    Workspace,
+    SOW,
+    ChatMessage,
+} from "@/lib/types/sow";
 import { anythingLLM } from "@/lib/anythingllm";
 import { toast } from "sonner";
 import { defaultEditorContent } from "@/lib/content";
@@ -12,6 +19,45 @@ import {
     UNFILED_FOLDER_NAME,
 } from "@/lib/ensure-unfiled-folder";
 import { extractPricingFromContent } from "@/lib/export-utils";
+
+// Environment configuration with validation
+const getBackendConfig = () => {
+    const backendUrl =
+        process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        "https://ahmad-socialgarden-backend.840tjq.easypanel.host";
+
+    console.log(`🔧 Backend configuration:`, {
+        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "not set",
+        NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL || "not set",
+        fallback: "https://ahmad-socialgarden-backend.840tjq.easypanel.host",
+        resolved: backendUrl,
+    });
+
+    return { backendUrl };
+};
+
+// Infrastructure health check function
+const checkBackendHealth = async (backendUrl: string): Promise<boolean> => {
+    try {
+        console.log(`🏥 Checking backend health: ${backendUrl}`);
+        const healthEndpoint = `${backendUrl}/health`;
+        const response = await fetch(healthEndpoint, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(5000), // 5 second timeout
+        });
+
+        const isHealthy = response.ok;
+        console.log(
+            `🏥 Backend health check: ${isHealthy ? "✅ HEALTHY" : "❌ UNHEALTHY"} (${response.status})`,
+        );
+        return isHealthy;
+    } catch (error) {
+        console.error(`🚨 Backend health check failed:`, error);
+        return false;
+    }
+};
 
 export function useDocumentState({
     mounted,
@@ -33,6 +79,7 @@ export function useDocumentState({
     const [latestEditorJSON, setLatestEditorJSON] = useState<any | null>(null);
     const editorRef = useRef<any>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [backendHealthy, setBackendHealthy] = useState<boolean | null>(null);
 
     useEffect(() => {
         console.log("Loading workspace data, mounted:", mounted);
@@ -43,6 +90,11 @@ export function useDocumentState({
         const loadData = async () => {
             setIsLoading(true);
             console.log("📂 Loading folders and SOWs from database...");
+
+            // Perform startup health check
+            const { backendUrl } = getBackendConfig();
+            const isHealthy = await checkBackendHealth(backendUrl);
+            setBackendHealthy(isHealthy);
 
             await ensureUnfiledFolder();
 
@@ -204,23 +256,45 @@ export function useDocumentState({
         if (doc) {
             console.log("✅ Found document:", doc.title);
             setCurrentDocId(doc.id);
-            // NOTE: Chat history loading was moved to `useChat` to avoid cross-hook dependencies
         } else {
             console.warn("⚠️ Document not found for SOW:", currentSOWId);
+            toast.error(
+                "Document not found. It may have been deleted or moved.",
+            );
+            setCurrentDocId(null);
         }
-    }, [currentSOWId]);
+    }, [currentSOWId, documents]);
 
     useEffect(() => {
         if (!currentDocId || latestEditorJSON === null) return;
 
         const timer = setTimeout(async () => {
             try {
+                // Validate currentDocId exists and is valid
+                if (!currentDocId || currentDocId.startsWith("temp-")) {
+                    console.log(
+                        "⏭️ Skipping auto-save for temporary or invalid document:",
+                        currentDocId,
+                    );
+                    return;
+                }
+
                 const editorContent =
                     editorRef.current?.getContent?.() || latestEditorJSON;
 
                 if (!editorContent) {
                     console.warn(
                         "⚠️ No editor content to save for:",
+                        currentDocId,
+                    );
+                    return;
+                }
+
+                // Validate document exists in local state
+                const currentDoc = documents.find((d) => d.id === currentDocId);
+                if (!currentDoc) {
+                    console.warn(
+                        "⚠️ Document not found in state, skipping auto-save:",
                         currentDocId,
                     );
                     return;
@@ -245,43 +319,154 @@ export function useDocumentState({
                     return sum + (isNaN(rowTotal) ? 0 : rowTotal);
                 }, 0);
 
-                const currentDoc = documents.find((d) => d.id === currentDocId);
-
                 // Ensure content is properly serialized as JSON string
-                const contentToSave = typeof editorContent === 'string' 
-                    ? editorContent 
-                    : JSON.stringify(editorContent);
+                const contentToSave =
+                    typeof editorContent === "string"
+                        ? editorContent
+                        : JSON.stringify(editorContent);
 
-                const response = await fetch(`/api/sow/${currentDocId}`, {
+                console.log(`💾 Auto-saving SOW ${currentDocId}...`);
+
+                // Prefer local Next.js API route for save; fallback to remote if needed
+                const localEndpoint = `/api/sow/${currentDocId}`;
+                console.log(`🔗 Auto-save endpoint (local): ${localEndpoint}`);
+
+                let response = await fetch(localEndpoint, {
                     method: "PUT",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        Accept: "application/json",
+                    },
                     body: JSON.stringify({
                         content: contentToSave,
-                        title: currentDoc?.title || "Untitled SOW",
+                        title: currentDoc.title || "Untitled SOW",
                         total_investment: isNaN(totalInvestment)
                             ? 0
                             : totalInvestment,
-                        vertical: currentDoc?.vertical || null,
-                        service_line: currentDoc?.service_line || null,
+                        vertical: currentDoc.vertical || null,
+                        service_line: currentDoc.service_line || null,
                     }),
                 });
 
                 if (!response.ok) {
+                    // Fallback to remote backend if local fails
+                    const { backendUrl } = getBackendConfig();
+                    const remoteEndpoint = `${backendUrl}/api/sow/${currentDocId}`;
                     console.warn(
-                        "⚠️ Auto-save failed for SOW:",
+                        "⚠️ Local save failed, attempting remote endpoint:",
+                        remoteEndpoint,
+                    );
+                    try {
+                        response = await fetch(remoteEndpoint, {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Accept: "application/json",
+                            },
+                            body: JSON.stringify({
+                                content: contentToSave,
+                                title: currentDoc.title || "Untitled SOW",
+                                total_investment: isNaN(totalInvestment)
+                                    ? 0
+                                    : totalInvestment,
+                                vertical: currentDoc.vertical || null,
+                                service_line: currentDoc.service_line || null,
+                            }),
+                        });
+                    } catch (fallbackErr) {
+                        console.error(
+                            "❌ Remote save attempt failed:",
+                            fallbackErr,
+                        );
+                    }
+                }
+
+                if (!response.ok) {
+                    const errorText = await response
+                        .text()
+                        .catch(() => "Unknown error");
+                    console.error(
+                        "❌ Auto-save failed for SOW:",
                         currentDocId,
                         "Status:",
                         response.status,
+                        "URL:",
+                        response.url || localEndpoint,
+                        "Error:",
+                        errorText,
                     );
+
+                    // Enhanced error handling for different failure modes
+                    if (response.status === 404) {
+                        console.warn(
+                            "📄 Document not found in backend, may need to be created first",
+                        );
+                    } else if (response.status >= 500) {
+                        console.error("🚨 Backend service error detected");
+                        toast.error(
+                            "Backend service unavailable - auto-save failed",
+                        );
+                    } else if (
+                        response.status === 401 ||
+                        response.status === 403
+                    ) {
+                        console.error("🔒 Authentication/authorization error");
+                        toast.error("Authentication error - please refresh");
+                    } else {
+                        toast.error(`Auto-save failed: ${response.status}`);
+                    }
                 } else {
                     console.log(
-                        "💾 Auto-save success for",
+                        "✅ Auto-save success for",
                         currentDocId,
                         `(Total: $${(isNaN(totalInvestment) ? 0 : totalInvestment).toFixed(2)})`,
+                        "to",
+                        localEndpoint,
                     );
                 }
             } catch (error) {
-                console.error("❌ Error auto-saving SOW:", error);
+                const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                console.error(
+                    "❌ CRITICAL: Auto-save network failure:",
+                    errorMessage,
+                );
+                const { backendUrl } = getBackendConfig();
+                const failedEndpoint = `${backendUrl}/api/sow/${currentDocId}`;
+
+                console.error("🔍 Failed endpoint:", failedEndpoint);
+                console.error("🔧 Backend config:", getBackendConfig());
+                console.error("📊 Error details:", error);
+
+                // Enhanced error categorization for infrastructure failures
+                if (
+                    errorMessage.includes("Failed to fetch") ||
+                    errorMessage.includes("NetworkError") ||
+                    errorMessage.includes("ERR_NETWORK") ||
+                    errorMessage.includes("ERR_INTERNET_DISCONNECTED")
+                ) {
+                    console.error(
+                        "🚨 INFRASTRUCTURE FAILURE: Backend service unreachable",
+                        {
+                            ...getBackendConfig(),
+                            currentDocId,
+                            failedEndpoint,
+                            error: errorMessage,
+                        },
+                    );
+                    toast.error(
+                        "🚨 Backend service unreachable - check infrastructure",
+                    );
+                } else if (errorMessage.includes("TypeError")) {
+                    console.error(
+                        "🔧 ENDPOINT CONSTRUCTION ERROR:",
+                        errorMessage,
+                    );
+                    toast.error("Configuration error - invalid API endpoint");
+                } else {
+                    console.error("❓ UNKNOWN AUTO-SAVE ERROR:", errorMessage);
+                    toast.error("Auto-save error occurred");
+                }
             }
         }, 1500);
 
@@ -311,7 +496,6 @@ export function useDocumentState({
             console.log("✅ LOAD SUCCESS for", currentDocId);
         }
     }, [currentDocId]);
-
 
     return {
         documents,

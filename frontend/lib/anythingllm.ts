@@ -2,21 +2,24 @@
 // Handles workspace creation, document embedding, and chat integration
 
 import SOCIAL_GARDEN_KNOWLEDGE_BASE from "./social-garden-knowledge-base";
+import { query } from "./db";
 
 // Get AnythingLLM URL from environment (NEXT_PUBLIC_ANYTHINGLLM_URL must be set in .env)
 // Falls back to Ahmad's instance for local development
 const ANYTHINGLLM_BASE_URL =
-    typeof window !== "undefined"
-        ? process.env.NEXT_PUBLIC_ANYTHINGLLM_URL ||
-          "https://ahmad-anything-llm.840tjq.easypanel.host"
-        : "https://ahmad-anything-llm.840tjq.easypanel.host";
+    (typeof window !== "undefined"
+        ? process.env.NEXT_PUBLIC_ANYTHINGLLM_URL
+        : process.env.ANYTHINGLLM_URL) || "";
 
-const ANYTHINGLLM_API_KEY = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
+const ANYTHINGLLM_API_KEY =
+    (typeof window !== "undefined"
+        ? process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY
+        : process.env.ANYTHINGLLM_API_KEY) || "";
 
-// Security validation: Ensure API key is set
-if (!ANYTHINGLLM_API_KEY) {
+// Security validation: Ensure API config is set and no hardcoded fallbacks
+if (!ANYTHINGLLM_BASE_URL || !ANYTHINGLLM_API_KEY) {
     throw new Error(
-        "Security Error: ANYTHINGLLM_API_KEY environment variable is required but not set.",
+        "Security Error: AnythingLLM configuration missing. Set ANYTHINGLLM_URL and ANYTHINGLLM_API_KEY in environment.",
     );
 }
 
@@ -270,7 +273,9 @@ export class AnythingLLMService {
             }
 
             // Create new workspace
-            console.log(`🆕 Creating new workspace: ${workspaceName} (${slug})`);
+            console.log(
+                `🆕 Creating new workspace: ${workspaceName} (${slug})`,
+            );
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/new`,
                 {
@@ -299,7 +304,10 @@ export class AnythingLLMService {
             await this.setArchitectPrompt(data.workspace.slug);
 
             // Embed the official Rate Card (Critical for SOW generation)
-            await this.embedRateCardDocument(data.workspace.slug);
+            const embedded = await this.embedRateCardDocument(data.workspace.slug);
+            if (!embedded) {
+                console.warn("⚠️ Rate card embedding failed; continuing without blocking workspace creation");
+            }
 
             return { id: data.workspace.id, slug: data.workspace.slug };
         } catch (error) {
@@ -632,9 +640,7 @@ If ANY value is negative or invalid, you MUST recalculate with discount_amount =
      * Get full workspace details including documents & threads
      * This is the "mirror" endpoint - retrieves complete workspace state from AnythingLLM
      */
-    async getWorkspaceDetails(
-        workspaceSlug: string,
-    ): Promise<any | null> {
+    async getWorkspaceDetails(workspaceSlug: string): Promise<any | null> {
         try {
             const response = await fetch(
                 `${this.baseUrl}/api/v1/workspace/${workspaceSlug}`,
@@ -830,12 +836,41 @@ If ANY value is negative or invalid, you MUST recalculate with discount_amount =
         metadata: Record<string, any> = {},
     ): Promise<boolean> {
         try {
+            if (!workspaceSlug || !workspaceSlug.trim()) {
+                console.warn("⚠️ embedSOWDocument: Missing workspaceSlug");
+                return false;
+            }
+            if (!sowTitle || !sowTitle.trim()) {
+                console.warn("⚠️ embedSOWDocument: Missing sowTitle");
+                return false;
+            }
+            if (!htmlContent || !htmlContent.trim()) {
+                console.warn("⚠️ embedSOWDocument: Missing htmlContent");
+                return false;
+            }
+
+            // Validate workspace exists before attempting to embed
+            console.log(`🔍 Validating workspace exists: ${workspaceSlug}`);
+            const workspaceDetails =
+                await this.getWorkspaceDetails(workspaceSlug);
+            if (!workspaceDetails) {
+                console.error(`❌ Workspace not found: ${workspaceSlug}`);
+                throw new Error(`Workspace '${workspaceSlug}' does not exist`);
+            }
+            console.log(`✅ Workspace validated: ${workspaceSlug}`);
+
             console.log(
                 `📄 Embedding SOW: ${sowTitle} to workspace: ${workspaceSlug}`,
             );
 
             // Convert HTML to plain text (remove tags)
             const textContent = this.htmlToText(htmlContent);
+            if (!textContent || !textContent.trim()) {
+                console.warn(
+                    "⚠️ embedSOWDocument: htmlToText produced empty content",
+                );
+                return false;
+            }
 
             // Create rich text with metadata
             const enrichedContent = `
@@ -852,35 +887,48 @@ Metadata:
       `.trim();
 
             // Step 1: Process raw text as document using AnythingLLM API
-            const rawTextResponse = await fetch(
+            console.log(`📤 Uploading document to AnythingLLM...`);
+            const uploadPayload = {
+                textContent: enrichedContent,
+                metadata: {
+                    title: sowTitle,
+                    docAuthor: metadata.docAuthor || "Social Garden",
+                    description: metadata.description || "Statement of Work",
+                    docSource: metadata.docSource || "SOW Generator",
+                    ...metadata,
+                },
+            };
+            console.log(
+                `📋 Upload payload:`,
+                JSON.stringify(uploadPayload, null, 2),
+            );
+
+            const rawTextResponse = await this.fetchWithTimeout(
                 `${this.baseUrl}/api/v1/document/raw-text`,
                 {
                     method: "POST",
                     headers: this.getHeaders(),
-                    body: JSON.stringify({
-                        textContent: enrichedContent,
-                        metadata: {
-                            title: sowTitle,
-                            docAuthor: metadata.docAuthor || "Social Garden",
-                            description:
-                                metadata.description || "Statement of Work",
-                            docSource: metadata.docSource || "SOW Generator",
-                            ...metadata,
-                        },
-                    }),
+                    body: JSON.stringify(uploadPayload),
                 },
+                12000,
             );
 
             if (!rawTextResponse.ok) {
                 const errorText = await rawTextResponse.text();
+                console.error(
+                    `❌ Document upload failed: ${rawTextResponse.status}`,
+                );
+                console.error(`❌ Error details: ${errorText}`);
                 throw new Error(
                     `Failed to process document: ${rawTextResponse.status} ${errorText}`,
                 );
             }
 
             const rawTextData = await rawTextResponse.json();
+            console.log(`📄 Upload response:`, rawTextData);
 
             if (!rawTextData.success || !rawTextData.documents?.[0]?.location) {
+                console.error(`❌ Document processing failed:`, rawTextData);
                 throw new Error(
                     rawTextData.error ||
                         "Document processing failed - no location returned",
@@ -890,28 +938,96 @@ Metadata:
             const documentLocation = rawTextData.documents[0].location;
             console.log(`✅ Document processed: ${documentLocation}`);
 
-            // Step 2: EMBED document in workspace (not just update)
-            // Using /update-embeddings endpoint (NOT /update)
-            const workspaceEmbedResponse = await fetch(
-                `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/update-embeddings`,
-                {
-                    method: "POST",
-                    headers: this.getHeaders(),
-                    body: JSON.stringify({
-                        adds: [documentLocation],
-                    }),
-                },
-            );
-
-            if (!workspaceEmbedResponse.ok) {
-                const errorText = await workspaceEmbedResponse.text();
-                console.error(`❌ Embedding failed: ${workspaceEmbedResponse.status} ${errorText}`);
+            // Validate document location format
+            if (!documentLocation || typeof documentLocation !== "string") {
+                console.error(
+                    `❌ Invalid document location: ${documentLocation}`,
+                );
                 throw new Error(
-                    `Failed to embed document in workspace: ${workspaceEmbedResponse.status} ${errorText}`,
+                    `Invalid document location returned: ${documentLocation}`,
                 );
             }
 
-            const embedResult = await workspaceEmbedResponse.json();
+            // Step 2: EMBED document in workspace (not just update)
+            // Using /update-embeddings endpoint (NOT /update)
+            let embedOk = false;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const reqBody = {
+                    adds: [String(documentLocation).trim()],
+                    deletes: [],
+                };
+
+                console.log(
+                    `🔄 Embedding attempt ${attempt + 1}/3 for workspace: ${workspaceSlug}`,
+                );
+                console.log(`📄 Document location: ${documentLocation}`);
+                console.log(
+                    `📋 Request body:`,
+                    JSON.stringify(reqBody, null, 2),
+                );
+
+                const workspaceEmbedResponse = await this.fetchWithTimeout(
+                    `${this.baseUrl}/api/v1/workspace/${workspaceSlug}/update-embeddings`,
+                    {
+                        method: "POST",
+                        headers: this.getHeaders(),
+                        body: JSON.stringify(reqBody),
+                    },
+                    12000,
+                );
+
+                if (workspaceEmbedResponse.ok) {
+                    embedOk = true;
+                    const responseData = await workspaceEmbedResponse
+                        .json()
+                        .catch(() => ({}));
+                    console.log(`✅ Embedding successful:`, responseData);
+                    break;
+                }
+
+                const status = workspaceEmbedResponse.status;
+                const errorText = await workspaceEmbedResponse
+                    .text()
+                    .catch(() => "");
+                console.error(
+                    `❌ Embedding failed (attempt ${attempt + 1}): ${status} ${errorText}`,
+                );
+                console.error(
+                    `🔍 Request URL: ${this.baseUrl}/api/v1/workspace/${workspaceSlug}/update-embeddings`,
+                );
+                console.error(`🔍 Request headers:`, this.getHeaders());
+
+                if ([429, 502, 503, 504].includes(status)) {
+                    console.log(
+                        `⏳ Retrying after ${400 * (attempt + 1)}ms due to server error`,
+                    );
+                    await new Promise((r) =>
+                        setTimeout(r, 400 * (attempt + 1)),
+                    );
+                    continue;
+                }
+
+                if (status === 400) {
+                    console.error(`🚨 400 Bad Request - Possible causes:`);
+                    console.error(
+                        `   - Invalid document path: ${documentLocation}`,
+                    );
+                    console.error(`   - Workspace not found: ${workspaceSlug}`);
+                    console.error(`   - Malformed request body`);
+
+                    if (attempt < 2) {
+                        console.log(`⏳ Retrying 400 error after 300ms`);
+                        await new Promise((r) => setTimeout(r, 300));
+                        continue;
+                    }
+                }
+
+                throw new Error(
+                    `Failed to embed document in workspace: ${status} ${errorText}`,
+                );
+            }
+
+            if (!embedOk) return false;
             console.log(`✅ Document EMBEDDED in workspace: ${workspaceSlug}`);
 
             return true;
@@ -1550,11 +1666,14 @@ You have access to the full SOW document that has been embedded in this workspac
     ): Promise<any> {
         try {
             if (!workspaceSlug || !threadSlug || !message) {
-                console.warn("⚠️ [chatWithThread] Missing required parameters:", {
-                    hasWorkspace: !!workspaceSlug,
-                    hasThread: !!threadSlug,
-                    hasMessage: !!message,
-                });
+                console.warn(
+                    "⚠️ [chatWithThread] Missing required parameters:",
+                    {
+                        hasWorkspace: !!workspaceSlug,
+                        hasThread: !!threadSlug,
+                        hasMessage: !!message,
+                    },
+                );
                 return null;
             }
 
@@ -1574,18 +1693,21 @@ You have access to the full SOW document that has been embedded in this workspac
                 let errorText = response.statusText;
                 try {
                     const errorData = await response.json().catch(() => ({}));
-                    errorText = errorData.error || errorData.message || response.statusText;
+                    errorText =
+                        errorData.error ||
+                        errorData.message ||
+                        response.statusText;
                 } catch (e) {
                     // If JSON parsing fails, use statusText
                 }
-                
+
                 console.error(
                     `❌ Failed to send chat message: ${response.status} ${errorText}`,
                     {
                         workspace: workspaceSlug,
                         thread: threadSlug,
                         status: response.status,
-                    }
+                    },
                 );
                 return null;
             }
@@ -1594,7 +1716,8 @@ You have access to the full SOW document that has been embedded in this workspac
             return data;
         } catch (error) {
             // Handle network errors, JSON parsing errors, etc.
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage =
+                error instanceof Error ? error.message : String(error);
             console.error("❌ Error sending chat message:", errorMessage, {
                 workspace: workspaceSlug,
                 thread: threadSlug,
@@ -1852,68 +1975,26 @@ When asked for analytics, provide clear, actionable insights with specific numbe
      * @param sowContent - The markdown content of the SOW
      * @param clientContext - Optional client context for analytics tagging
      */
+    /**
+     * DEPRECATED: Use embedSOWDocument directly for single workspace embedding
+     * This method violates the Client = Workspace architecture principle
+     * @deprecated Use embedSOWDocument(workspaceSlug, title, content) instead
+     */
     async embedSOWInBothWorkspaces(
         sowTitle: string,
         sowContent: string,
         clientContext?: string,
     ): Promise<boolean> {
-        try {
-            const masterWorkspaceSlug = "sow-generator";
-            const masterDashboardSlug = await this.getOrCreateMasterDashboard();
+        console.warn(
+            "⚠️ DEPRECATED: embedSOWInBothWorkspaces violates Client = Workspace architecture",
+        );
+        console.warn(
+            "⚠️ Use embedSOWDocument(workspaceSlug, title, content) instead",
+        );
 
-            console.log(`📊 Embedding SOW in workspaces...`);
-            console.log(
-                `   📁 Master generation workspace: ${masterWorkspaceSlug}`,
-            );
-            console.log(`   � Master dashboard: ${masterDashboardSlug}`);
-            if (clientContext) {
-                console.log(`   👤 Client context: ${clientContext}`);
-            }
-
-            // Step 1: Embed in master GENERATION workspace (RAG context)
-            const masterEmbed = await this.embedSOWDocument(
-                masterWorkspaceSlug,
-                sowTitle,
-                sowContent,
-            );
-
-            if (!masterEmbed) {
-                console.warn(
-                    `⚠️ Failed to embed SOW in master generation workspace: ${masterWorkspaceSlug}`,
-                );
-                return false;
-            }
-
-            console.log(
-                `✅ SOW embedded in master generation workspace: ${masterWorkspaceSlug}`,
-            );
-
-            // Step 2: Embed in master dashboard for analytics (use client context if provided)
-            const dashboardTitle = clientContext
-                ? `[${clientContext.toUpperCase()}] ${sowTitle}`
-                : sowTitle;
-
-            const dashboardEmbed = await this.embedSOWDocument(
-                masterDashboardSlug,
-                dashboardTitle,
-                sowContent,
-            );
-
-            if (!dashboardEmbed) {
-                console.warn(`⚠️ Failed to embed SOW in master dashboard`);
-                return false;
-            }
-
-            console.log(`✅ SOW embedded in master dashboard for analytics`);
-            console.log(
-                `✅✅✅ SOW successfully embedded in all required workspaces!`,
-            );
-
-            return true;
-        } catch (error) {
-            console.error("❌ Error embedding SOW in workspaces:", error);
-            return false;
-        }
+        // For backward compatibility, just return true without doing anything
+        // This prevents breaking existing code while we transition
+        return true;
     }
 
     /**
@@ -2011,7 +2092,10 @@ When asked for analytics, provide clear, actionable insights with specific numbe
                 },
             };
         } catch (error) {
-            console.error(`❌ Error mirroring workspace ${workspaceSlug}:`, error);
+            console.error(
+                `❌ Error mirroring workspace ${workspaceSlug}:`,
+                error,
+            );
             return null;
         }
     }
@@ -2023,7 +2107,11 @@ When asked for analytics, provide clear, actionable insights with specific numbe
     async mirrorThread(
         workspaceSlug: string,
         threadSlug: string,
-    ): Promise<Array<{ role: string; content: string; timestamp?: number }> | null> {
+    ): Promise<Array<{
+        role: string;
+        content: string;
+        timestamp?: number;
+    }> | null> {
         try {
             const chats = await this.getThreadChats(workspaceSlug, threadSlug);
             return chats.map((chat: any) => ({

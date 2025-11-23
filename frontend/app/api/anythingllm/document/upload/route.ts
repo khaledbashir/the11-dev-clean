@@ -5,9 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
 // Accepts multipart/form-data with file, workspaceSlug, and optional metadata
 
 function getEnv() {
-  const baseUrl = process.env.ANYTHINGLLM_URL || process.env.NEXT_PUBLIC_ANYTHINGLLM_URL || 'https://ahmad-anything-llm.840tjq.easypanel.host';
-  const apiKey = process.env.ANYTHINGLLM_API_KEY || process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY || '0G0WTZ3-6ZX4D20-H35VBRG-9059WPA';
-  return { baseUrl: baseUrl.replace(/\/$/, ''), apiKey };
+  const baseUrl = (process.env.ANYTHINGLLM_URL || process.env.NEXT_PUBLIC_ANYTHINGLLM_URL || '').replace(/\/$/, '');
+  const apiKey = process.env.ANYTHINGLLM_API_KEY || process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY || '';
+  return { baseUrl, apiKey };
 }
 
 export async function POST(req: NextRequest) {
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const { baseUrl, apiKey } = getEnv();
     if (!baseUrl || !apiKey) {
       return NextResponse.json(
-        { error: 'AnythingLLM not configured' },
+        { error: 'AnythingLLM not configured. Set ANYTHINGLLM_URL and ANYTHINGLLM_API_KEY in environment.' },
         { status: 500 }
       );
     }

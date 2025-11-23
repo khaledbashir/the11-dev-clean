@@ -481,6 +481,19 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
                   <Text style={styles.scopeDescription}>{scopeDescription}</Text>
                 ) : null}
 
+                {/* Deliverables (moved above items table per Sam) */}
+                {sanitizedDeliverables.length > 0 && (
+                  <View style={[styles.listSection, styles.deliverablesCard]}>
+                    <Text style={styles.listTitle}>Deliverables</Text>
+                    {sanitizedDeliverables.map((deliverable, index) => (
+                      <Text key={index} style={styles.listItem}>
+                        <Text style={styles.bullet}>• </Text>
+                        {deliverable}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+
                 {/* Items Table */}
                 <View style={styles.table}>
                   {/* Table Header */}
@@ -519,7 +532,7 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
                         </View>
                         <View style={styles.colCost}>
                           <Text style={styles.tableCellTextBold}>
-                            {formatCurrency(item.cost, currency)}
+                        {formatCurrency(item.cost, currency, { includeGST: gstApplicable })}
                           </Text>
                         </View>
                       </View>
@@ -541,24 +554,11 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
                     </View>
                     <View style={styles.colCost}>
                       <Text style={styles.tableCellTextBold}>
-                        {formatCurrency(calculateScopeTotal(scope.items), currency)}
+                        {formatCurrency(calculateScopeTotal(scope.items), currency, { includeGST: gstApplicable })}
                       </Text>
                     </View>
                   </View>
                 </View>
-
-                {/* Deliverables */}
-                {sanitizedDeliverables.length > 0 && (
-                  <View style={[styles.listSection, styles.deliverablesCard]}>
-                    <Text style={styles.listTitle}>Deliverables</Text>
-                    {sanitizedDeliverables.map((deliverable, index) => (
-                      <Text key={index} style={styles.listItem}>
-                        <Text style={styles.bullet}>• </Text>
-                        {deliverable}
-                      </Text>
-                    ))}
-                  </View>
-                )}
 
                 {/* Assumptions */}
                 {sanitizedAssumptions.length > 0 && (
@@ -582,7 +582,7 @@ const SOWPdfExport: React.FC<SOWPdfExportProps> = ({ sowData }) => {
           <View style={styles.grandTotalContainer}>
             <Text style={styles.grandTotalLabel}>Total Project Investment</Text>
             <Text style={styles.grandTotalAmount}>
-              {formatCurrency(grandTotal, currency)}
+              {formatCurrency(grandTotal, currency, { includeGST: gstApplicable })}
             </Text>
             {gstApplicable ? (
               <Text style={styles.grandTotalHint}>GST not included</Text>

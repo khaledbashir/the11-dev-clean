@@ -3,10 +3,26 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { ArchitectSOW } from "@/lib/export-utils";
-import type { Document, Folder, Agent, Workspace, SOW, ChatMessage } from "@/lib/types/sow";
+import type {
+    Document,
+    Folder,
+    Agent,
+    Workspace,
+    SOW,
+    ChatMessage,
+} from "@/lib/types/sow";
 import { transformScopesToPDFFormat } from "@/lib/sow-utils";
-import { convertMarkdownToNovelJSON, ConvertOptions, convertNovelToHTML } from "@/lib/editor-utils";
-import { extractPricingJSON, buildSuggestedRolesFromArchitectSOW, sanitizeEmptyTextNodes, extractFinancialReasoning } from "@/lib/page-utils";
+import {
+    convertMarkdownToNovelJSON,
+    ConvertOptions,
+    convertNovelToHTML,
+} from "@/lib/editor-utils";
+import {
+    extractPricingJSON,
+    buildSuggestedRolesFromArchitectSOW,
+    sanitizeEmptyTextNodes,
+    extractFinancialReasoning,
+} from "@/lib/page-utils";
 import { ROLES } from "@/lib/rateCard";
 import { calculatePricingTable } from "@/lib/pricingCalculator";
 import { InteractiveOnboarding } from "@/components/tailwind/interactive-onboarding";
@@ -20,7 +36,10 @@ import DashboardRight from "@/components/tailwind/DashboardRight";
 import HomeWelcome from "@/components/tailwind/home-welcome";
 import WorkspaceChat from "@/components/tailwind/workspace-chat";
 import CreateWorkspaceDialog from "@/components/tailwind/create-workspace-dialog";
-import { SendToClientModal, ShareLinkModal } from "@/components/tailwind/page-modals";
+import {
+    SendToClientModal,
+    ShareLinkModal,
+} from "@/components/tailwind/page-modals";
 import { validateAIResponse } from "@/lib/input-validation";
 import { extractBudgetAndDiscount } from "@/lib/page-utils";
 import { extractSOWStructuredJson } from "@/lib/export-utils";
@@ -51,28 +70,28 @@ import { useUIState } from "@/hooks/useUIState";
 
 export default function Page() {
     const {
-      sidebarOpen,
-      setSidebarOpen,
-      agentSidebarOpen,
-      setAgentSidebarOpen,
-      showSendModal,
-      setShowSendModal,
-      showShareModal,
-      setShowShareModal,
-      shareModalData,
-      setShareModalData,
-      showGuidedSetup,
-      setShowGuidedSetup,
-      viewMode,
-      setViewMode,
-      isGrandTotalVisible,
-      setIsGrandTotalVisible,
-      showNewPDFModal,
-      setShowNewPDFModal,
-      newPDFData,
-      setNewPDFData,
-      showOnboarding,
-      setShowOnboarding,
+        sidebarOpen,
+        setSidebarOpen,
+        agentSidebarOpen,
+        setAgentSidebarOpen,
+        showSendModal,
+        setShowSendModal,
+        showShareModal,
+        setShowShareModal,
+        shareModalData,
+        setShareModalData,
+        showGuidedSetup,
+        setShowGuidedSetup,
+        viewMode,
+        setViewMode,
+        isGrandTotalVisible,
+        setIsGrandTotalVisible,
+        showNewPDFModal,
+        setShowNewPDFModal,
+        newPDFData,
+        setNewPDFData,
+        showOnboarding,
+        setShowOnboarding,
     } = useUIState();
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
@@ -131,7 +150,7 @@ export default function Page() {
         currentSOWId,
         setLatestEditorJSON,
     });
-    
+
     // --- Role sanitization helpers ---
     const normalize = (s: string) =>
         (s || "")
@@ -277,8 +296,11 @@ export default function Page() {
     };
 
     // Create workspace dialog state
-    const [createWorkspaceDialogOpen, setCreateWorkspaceDialogOpen] = useState(false);
-    const [createWorkspaceType, setCreateWorkspaceType] = useState<"sow" | "client" | "generic">("sow");
+    const [createWorkspaceDialogOpen, setCreateWorkspaceDialogOpen] =
+        useState(false);
+    const [createWorkspaceType, setCreateWorkspaceType] = useState<
+        "sow" | "client" | "generic"
+    >("sow");
 
     // Workspace creation progress state (NEW)
     const [workspaceCreationProgress, setWorkspaceCreationProgress] = useState<{
@@ -408,6 +430,36 @@ export default function Page() {
         setMounted(true);
     }, []);
 
+    // Helper function to verify document exists in database
+    const verifyDocumentPersistence = async (
+        sowId: string,
+    ): Promise<boolean> => {
+        try {
+            console.log(`🔍 Verifying document persistence for ${sowId}...`);
+            const response = await fetch(`/api/sow/${sowId}`, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            if (response.ok) {
+                const sowData = await response.json();
+                console.log(`✅ Document ${sowId} verified in database`);
+                return !!sowData;
+            } else {
+                console.error(
+                    `❌ Document ${sowId} not found in database: ${response.status}`,
+                );
+                return false;
+            }
+        } catch (error) {
+            console.error(
+                `❌ Error verifying document persistence for ${sowId}:`,
+                error,
+            );
+            return false;
+        }
+    };
+
     // Synchronous save helper used before navigating away from a document
     const saveCurrentSOWNow = async (docId: string): Promise<boolean> => {
         try {
@@ -529,60 +581,178 @@ export default function Page() {
             const newUrl = `${window.location.pathname}?${params.toString()}`;
             window.history.replaceState({}, "", newUrl);
 
-            // Proactively load editor content for the new document
-            const nextDoc = documents.find((d) => d.id === id);
+            // Proactively load editor content for the new document with retry logic
+            let nextDoc = documents.find((d) => d.id === id);
+            let retryCount = 0;
+            const maxRetries = 3;
+
+            // Retry logic for document not found scenarios
+            while (!nextDoc && retryCount < maxRetries) {
+                console.log(
+                    `⏳ Document ${id} not found, retrying... (${retryCount + 1}/${maxRetries})`,
+                );
+
+                // Wait before retry
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Try to refetch documents from state
+                nextDoc = documents.find((d) => d.id === id);
+                retryCount++;
+
+                // If still not found, try to fetch from database
+                if (!nextDoc && retryCount === maxRetries) {
+                    console.log(
+                        `🔄 Attempting to fetch document ${id} from database...`,
+                    );
+                    try {
+                        const response = await fetch(`/api/sow/${id}`);
+                        if (response.ok) {
+                            const sowData = await response.json();
+                            const fetchedDoc: Document = {
+                                id: sowData.id,
+                                title: sowData.title || "Untitled SOW",
+                                content:
+                                    sowData.content ||
+                                    JSON.stringify({
+                                        type: "doc",
+                                        content: [
+                                            {
+                                                type: "paragraph",
+                                                content: [
+                                                    { type: "text", text: "" },
+                                                ],
+                                            },
+                                        ],
+                                    }),
+                                folderId: sowData.folder_id,
+                                workspaceSlug: sowData.workspace_slug || "",
+                                threadSlug: sowData.thread_slug || "",
+                                syncedAt:
+                                    sowData.updated_at ||
+                                    new Date().toISOString(),
+                            };
+
+                            // Add to documents state
+                            setDocuments((prev) => [...prev, fetchedDoc]);
+                            nextDoc = fetchedDoc;
+                            console.log(
+                                `✅ Document ${id} fetched from database and added to state`,
+                            );
+                        }
+                    } catch (error) {
+                        console.error(
+                            `❌ Failed to fetch document ${id} from database:`,
+                            error,
+                        );
+                    }
+                }
+            }
+
             if (!nextDoc) {
-                console.error("❌ Document not found:", id);
-                toast.error("Document not found. Please refresh the page.");
+                console.error(
+                    `❌ Document not found after ${maxRetries} retries:`,
+                    id,
+                );
+                toast.error(
+                    "Document not found after retries. Please refresh the page.",
+                );
                 return;
             }
-            
+
+            // DETERMINISTIC CONTENT LOADING: Ensure editor is ready before loading content
             if (editorRef.current) {
                 console.log("📄 Loading content for SOW", id, "...");
                 try {
-                    // Wait a brief moment to ensure editor is ready
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    if (editorRef.current.commands?.setContent) {
-                        editorRef.current.commands.setContent(nextDoc.content);
-                    } else if (editorRef.current.insertContent) {
-                        editorRef.current.insertContent(nextDoc.content);
-                    } else {
-                        console.warn("⚠️ Editor methods not available, content may not load");
+                    // Validate content exists and is valid
+                    if (!nextDoc.content) {
+                        console.warn(
+                            `⚠️ Document ${id} has no content, using default`,
+                        );
+                        nextDoc.content = JSON.stringify({
+                            type: "doc",
+                            content: [
+                                {
+                                    type: "paragraph",
+                                    content: [{ type: "text", text: "" }],
+                                },
+                            ],
+                        });
                     }
+
+                    // Wait for editor to be fully ready
+                    let editorReady = false;
+                    let editorRetries = 0;
+                    const maxEditorRetries = 5;
+
+                    while (!editorReady && editorRetries < maxEditorRetries) {
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 100),
+                        );
+
+                        if (editorRef.current?.commands?.setContent) {
+                            editorReady = true;
+                        } else {
+                            console.log(
+                                `⏳ Waiting for editor to be ready... (${editorRetries + 1}/${maxEditorRetries})`,
+                            );
+                            editorRetries++;
+                        }
+                    }
+
+                    if (!editorReady) {
+                        console.error(
+                            "❌ Editor failed to initialize after retries",
+                        );
+                        toast.error(
+                            "Editor failed to initialize. Please refresh the page.",
+                        );
+                        return;
+                    }
+
+                    // Load content into editor
+                    editorRef.current.commands.setContent(nextDoc.content);
                     console.log("✅ LOAD SUCCESS for", id);
                 } catch (error) {
                     console.error("❌ Error loading document content:", error);
-                    toast.error("Failed to load document content. Please try again.");
+                    toast.error(
+                        "Failed to load document content. Please try again.",
+                    );
+                    return;
                 }
             } else {
-                console.warn("⚠️ Editor ref not available yet, content will load when editor initializes");
+                console.warn(
+                    "⚠️ Editor ref not available yet, content will load when editor initializes",
+                );
             }
 
             // Ensure we are in editor view
-            if (viewMode !== "editor") {
-                setViewMode("editor");
-            }
+            setViewMode("editor");
         })();
     };
 
     const handleNewDoc = async (folderId?: string) => {
         const newId = `doc${Date.now()}`;
-        
+
         // Generate a meaningful title based on workspace/client name
         const targetFolderId = folderId || UNFILED_FOLDER_ID;
-        const parentWorkspaceForTitle = workspaces.find((w) => w.id === targetFolderId);
+        const parentWorkspaceForTitle = workspaces.find(
+            (w) => w.id === targetFolderId,
+        );
         const workspaceName = parentWorkspaceForTitle?.name || "New Project";
-        
+
         // Generate a unique title using workspace name and date
         const today = new Date();
-        const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const dateStr = today.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+        });
         const title = `${workspaceName} - SOW ${dateStr}`;
 
         // 🎯 DEFAULT TO UNFILED: If no folder specified, use Unfiled folder
         // Find workspace slug from the folder this SOW belongs to
         const parentWorkspace = workspaces.find((w) => w.id === targetFolderId);
-        const workspaceSlug = parentWorkspace?.workspace_slug || parentWorkspace?.slug;
+        const workspaceSlug =
+            parentWorkspace?.workspace_slug || parentWorkspace?.slug;
 
         // 🎯 Check if this is the Unfiled folder (no workspace needed)
         const isUnfiledFolder = targetFolderId === UNFILED_FOLDER_ID;
@@ -614,12 +784,13 @@ export default function Page() {
                     // 📊 Embed SOW in master 'gen' workspace and master dashboard
                     console.log(`📊 Embedding new SOW in master workspaces`);
                     const sowContent = JSON.stringify(defaultEditorContent);
-                    const clientContext = parentWorkspace?.name || "unknown";
-                    await anythingLLM.embedSOWInBothWorkspaces(
-                        title,
-                        sowContent,
-                        clientContext,
-                    );
+                    if (workspaceSlug) {
+                        await anythingLLM.embedSOWDocument(
+                            workspaceSlug,
+                            title,
+                            sowContent,
+                        );
+                    }
 
                     toast.success(
                         `✅ SOW created in ${parentWorkspace?.name || "workspace"}`,
@@ -848,7 +1019,8 @@ export default function Page() {
             }
 
             // 🏢 Update AnythingLLM workspace name if it exists
-            const workspaceSlug = workspace?.workspace_slug || workspace?.workspaceSlug;
+            const workspaceSlug =
+                workspace?.workspace_slug || workspace?.workspaceSlug;
             if (workspaceSlug) {
                 await anythingLLM.updateWorkspace(workspaceSlug, name);
             }
@@ -893,12 +1065,15 @@ export default function Page() {
             }
 
             // 🏢 Delete AnythingLLM workspace (cascades to all threads)
-            const workspaceSlug = workspace?.workspace_slug || workspace?.workspaceSlug;
+            const workspaceSlug =
+                workspace?.workspace_slug || workspace?.workspaceSlug;
             if (workspaceSlug) {
                 await anythingLLM.deleteWorkspace(workspaceSlug);
             }
 
-            setWorkspaces((prev) => prev.filter((w) => !toDelete.includes(w.id)));
+            setWorkspaces((prev) =>
+                prev.filter((w) => !toDelete.includes(w.id)),
+            );
             setDocuments((prev) =>
                 prev.filter(
                     (d) => !d.folderId || !toDelete.includes(d.folderId),
@@ -1000,7 +1175,10 @@ export default function Page() {
 
             // IMMEDIATELY CREATE A BLANK SOW with meaningful title
             const today = new Date();
-            const dateStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const dateStr = today.toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+            });
             const sowTitle = `${workspaceName} - SOW ${dateStr}`;
 
             // Save SOW to database with folder ID
@@ -1049,12 +1227,12 @@ export default function Page() {
             }));
 
             // 📊 STEP 4: Embed SOW in workspace and master dashboard
-            console.log("📊 Embedding SOW in workspaces...");
+            console.log("📊 Embedding SOW in client workspace...");
             const sowContent = JSON.stringify(defaultEditorContent);
-            await anythingLLM.embedSOWInBothWorkspaces(
+            await anythingLLM.embedSOWDocument(
+                workspace.slug,
                 sowTitle,
                 sowContent,
-                workspaceName,
             );
             console.log("✅ SOW embedded in workspaces");
 
@@ -1092,22 +1270,110 @@ export default function Page() {
                 syncedAt: new Date().toISOString(),
             };
 
-            setDocuments((prev) => [...prev, newDoc]);
+            console.log(`📊 STATE SYNC: Adding document to state:`, {
+                id: sowId,
+                title: sowTitle,
+                folderId: folderId,
+                workspaceSlug: workspace.slug,
+                threadSlug: thread.slug,
+                currentDocsCount: documents.length,
+            });
+
+            setDocuments((prev) => {
+                const updated = [...prev, newDoc];
+                console.log(
+                    `📊 STATE SYNC: Documents updated, new count: ${updated.length}`,
+                );
+                return updated;
+            });
+
             setCurrentDocId(sowId);
             setChatMessages([]);
+
+            console.log(`📊 STATE SYNC: Current document ID set to: ${sowId}`);
 
             toast.success(
                 `✅ Created workspace "${workspaceName}" with blank SOW ready to edit!`,
             );
 
-            // Close progress modal and auto-select the new SOW
-            setTimeout(() => {
-                setWorkspaceCreationProgress((prev) => ({
-                    ...prev,
-                    isOpen: false,
-                }));
-                handleSelectDoc(sowId);
-            }, 500);
+            // DETERMINISTIC STATE LOADING: Ensure document is fully loaded before navigation
+            console.log(`🔄 Verifying document state for ${sowId}...`);
+
+            // Wait for React state updates to complete
+            await new Promise((resolve) => setTimeout(resolve, 200));
+
+            // Verify document exists in current state with detailed logging
+            const currentDocs = documents.concat([newDoc]);
+            const docExists = currentDocs.some((doc) => doc.id === sowId);
+
+            console.log(`📊 STATE SYNC: Document verification:`, {
+                sowId,
+                docExists,
+                totalDocs: currentDocs.length,
+                documentIds: currentDocs.map((d) => d.id),
+                targetDocFound: currentDocs.find((d) => d.id === sowId)
+                    ? "YES"
+                    : "NO",
+            });
+
+            if (!docExists) {
+                console.error(
+                    `❌ CRITICAL: Document ${sowId} not found in state after creation`,
+                );
+                console.error(
+                    `📊 STATE SYNC: Available documents:`,
+                    currentDocs.map((d) => ({ id: d.id, title: d.title })),
+                );
+                throw new Error(
+                    `Document state synchronization failed for ${sowId}`,
+                );
+            }
+
+            // Verify document persistence in database
+            const isPersisted = await verifyDocumentPersistence(sowId);
+            if (!isPersisted) {
+                console.error(
+                    `❌ CRITICAL: Document ${sowId} not persisted in database`,
+                );
+                throw new Error(
+                    `Document persistence verification failed for ${sowId}`,
+                );
+            }
+
+            console.log(
+                `✅ Document ${sowId} verified in both state and database, proceeding with navigation`,
+            );
+
+            // Close progress modal
+            setWorkspaceCreationProgress((prev) => ({
+                ...prev,
+                isOpen: false,
+            }));
+
+            // Direct navigation without handleSelectDoc to avoid race condition
+            console.log(`🎯 Direct navigation to document ${sowId}`);
+            console.log(`📊 STATE SYNC: Pre-navigation state:`, {
+                currentDocId: currentDocId,
+                viewMode: viewMode,
+                documentsCount: documents.length,
+                targetDocExists: documents.some((d) => d.id === sowId),
+            });
+
+            setCurrentDocId(sowId);
+            setViewMode("editor");
+
+            console.log(`📊 STATE SYNC: Post-navigation state set:`, {
+                newCurrentDocId: sowId,
+                newViewMode: "editor",
+            });
+
+            // Update URL without triggering handleSelectDoc
+            const params = new URLSearchParams(window.location.search);
+            params.set("sow", sowId);
+            const newUrl = `${window.location.pathname}?${params.toString()}`;
+            window.history.replaceState({}, "", newUrl);
+
+            console.log(`📊 STATE SYNC: URL updated to: ${newUrl}`);
         } catch (error) {
             console.error("❌ Error creating workspace:", error);
             toast.error("Failed to create workspace. Please try again.");
@@ -1189,7 +1455,7 @@ export default function Page() {
                         const folderSOWs = dbSOWs.filter(
                             (sow: any) => sow.folder_id === folder.id,
                         );
-                        
+
                         // Create workspace with all metadata
                         const workspace: Workspace = {
                             id: folder.id,
@@ -1208,7 +1474,7 @@ export default function Page() {
                             embedId: folder.embed_id,
                             syncedAt: folder.updated_at || folder.created_at,
                         };
-                        
+
                         workspacesWithSOWs.push(workspace);
 
                         for (const sow of folderSOWs) {
@@ -1261,9 +1527,13 @@ export default function Page() {
             });
 
             // 🛡️ CRITICAL: Prevent duplicate creation - check if a temp SOW already exists
-            const hasTempSOW = documents.some((doc) => doc.id.startsWith("temp-"));
+            const hasTempSOW = documents.some((doc) =>
+                doc.id.startsWith("temp-"),
+            );
             if (hasTempSOW) {
-                console.warn("⚠️ SOW creation already in progress, ignoring duplicate request");
+                console.warn(
+                    "⚠️ SOW creation already in progress, ignoring duplicate request",
+                );
                 return;
             }
 
@@ -1322,11 +1592,17 @@ export default function Page() {
                     console.log("🔄 [Background] Starting heavy operations...");
 
                     // 🎯 DATA ISOLATION FIX: Use Client Workspace, NOT Master SOW Workspace
-                    const targetWorkspace = workspaces.find(w => w.id === workspaceId);
-                    const targetSlug = targetWorkspace?.workspace_slug || targetWorkspace?.slug;
-                    
+                    const targetWorkspace = workspaces.find(
+                        (w) => w.id === workspaceId,
+                    );
+                    const targetSlug =
+                        targetWorkspace?.workspace_slug ||
+                        targetWorkspace?.slug;
+
                     if (!targetSlug) {
-                        throw new Error(`Target workspace slug not found for ID: ${workspaceId}`);
+                        throw new Error(
+                            `Target workspace slug not found for ID: ${workspaceId}`,
+                        );
                     }
 
                     console.log(
@@ -1812,7 +2088,6 @@ export default function Page() {
 
     // NEW: Professional PDF Export Handler
 
-
     const handleExportNewPDF = async () => {
         if (!currentDoc) {
             toast.error("❌ No document selected");
@@ -1912,7 +2187,10 @@ export default function Page() {
                         // Try to parse as JSON for better error messages
                         try {
                             const errorJson = JSON.parse(errorText);
-                            errorText = errorJson.error || errorJson.details || errorText;
+                            errorText =
+                                errorJson.error ||
+                                errorJson.details ||
+                                errorText;
                         } catch {
                             // Not JSON, use as-is
                         }
@@ -1925,7 +2203,7 @@ export default function Page() {
                     );
                     toast.error(
                         `❌ PDF export failed: ${errorText || `Error ${response.status}`}. Please check the console for details.`,
-                        { duration: 8000 }
+                        { duration: 8000 },
                     );
                     return;
                 }
@@ -1969,10 +2247,11 @@ export default function Page() {
             }
         } catch (error: any) {
             console.error("❌ Error preparing new PDF:", error);
-            const errorMessage = error?.message || error?.toString() || "Unknown error occurred";
+            const errorMessage =
+                error?.message || error?.toString() || "Unknown error occurred";
             toast.error(
                 `❌ PDF export failed: ${errorMessage}. Please try again or contact support if the issue persists.`,
-                { duration: 8000 }
+                { duration: 8000 },
             );
         }
     };
@@ -2070,8 +2349,12 @@ export default function Page() {
         }
         toast.info("📤 Preparing portal link...");
         try {
-            const currentWorkspace = workspaces.find((w) => w.id === currentDoc.folderId);
-            const workspaceSlug = currentWorkspace?.workspace_slug || currentWorkspace?.workspaceSlug;
+            const currentWorkspace = workspaces.find(
+                (w) => w.id === currentDoc.folderId,
+            );
+            const workspaceSlug =
+                currentWorkspace?.workspace_slug ||
+                currentWorkspace?.workspaceSlug;
             if (!currentWorkspace || !workspaceSlug) {
                 toast.error("❌ No workspace found for this SOW");
                 return;
@@ -2079,12 +2362,17 @@ export default function Page() {
 
             const htmlContent = editorRef.current?.getHTML() || "";
             if (!htmlContent || htmlContent === "<p></p>") {
-                toast.error("❌ Document is empty. Add content before sharing.");
+                toast.error(
+                    "❌ Document is empty. Add content before sharing.",
+                );
                 return;
             }
 
-            const clientContext = currentWorkspace?.name || "unknown";
-            await anythingLLM.embedSOWInBothWorkspaces(currentDoc.title, htmlContent, clientContext);
+            await anythingLLM.embedSOWDocument(
+                workspaceSlug,
+                currentDoc.title,
+                htmlContent,
+            );
 
             const portalUrl = `${window.location.origin}/portal/sow/${currentDoc.id}`;
 
@@ -2098,7 +2386,9 @@ export default function Page() {
                 input.select();
                 document.execCommand("copy");
                 document.body.removeChild(input);
-                toast.success("✅ Portal link copied (fallback)! SOW is now shareable.");
+                toast.success(
+                    "✅ Portal link copied (fallback)! SOW is now shareable.",
+                );
             }
         } catch (error: any) {
             console.error("Error sharing portal:", error);
@@ -2151,13 +2441,19 @@ export default function Page() {
         }
     };
 
+    // Deduplicate workspaces to prevent duplicate key errors
+    const uniqueWorkspaces = workspaces.filter(
+        (workspace, index, self) =>
+            index === self.findIndex((w) => w.id === workspace.id),
+    );
+
     return (
         <>
             <ResizableLayout
                 leftPanel={
                     <SidebarNav
                         documents={documents}
-                        workspaces={workspaces}
+                        workspaces={uniqueWorkspaces}
                         currentWorkspaceId={currentWorkspaceId}
                         currentSOWId={currentDocId}
                         onSelectWorkspace={setCurrentWorkspaceId}
@@ -2170,7 +2466,10 @@ export default function Page() {
                         onReorderSOWs={handleReorderSOWs}
                         onViewChange={handleViewChange}
                         currentView={viewMode}
-                        onCreateWorkspace={(name?: string, type?: "sow" | "client" | "generic") => {
+                        onCreateWorkspace={(
+                            name?: string,
+                            type?: "sow" | "client" | "generic",
+                        ) => {
                             if (name) {
                                 handleCreateWorkspace(name, type || "sow");
                             } else {
@@ -2183,91 +2482,110 @@ export default function Page() {
                     />
                 }
                 mainPanel={
-                <>
-                {viewMode === "dashboard" && (
-                    <div className="flex h-full">
-                        <DashboardMain
-                            workspaces={workspaces}
-                            sows={documents}
-                            folders={workspaces.map(w => ({
-                                id: w.id,
-                                name: w.name,
-                                workspaceSlug: w.workspaceSlug || w.workspace_slug || w.slug || '',
-                                workspaceId: w.workspaceId,
-                                embedId: w.embedId,
-                                parentId: w.parentId,
-                                syncedAt: w.syncedAt,
-                                sowIds: w.sows?.map(s => s.id) || [],
-                            }))}
-                            onSelectSOW={handleSelectDoc}
-                            onCreateSOW={handleCreateSOW}
-                            onDeleteSOW={handleDeleteDoc}
-                            onRenameSOW={handleRenameSOW}
-                            onMoveSOW={handleMoveSOW}
-                            onCreateWorkspace={async (name: string, type?: "sow" | "client" | "generic") => {
-                                await handleCreateWorkspace(name, type || "sow");
-                            }}
-                            onDeleteWorkspace={handleDeleteWorkspace}
-                            onRenameWorkspace={handleRenameWorkspace}
-                        />
-                        <DashboardRight
-                            dashboardChatTarget={dashboardChatTarget}
-                            onDashboardWorkspaceChange={setDashboardChatTarget}
-                            availableWorkspaces={availableWorkspaces}
-                        />
-                    </div>
-                )}
+                    <>
+                        {viewMode === "dashboard" && (
+                            <div className="flex h-full">
+                                <DashboardMain
+                                    workspaces={uniqueWorkspaces}
+                                    sows={documents}
+                                    folders={uniqueWorkspaces.map((w) => ({
+                                        id: w.id,
+                                        name: w.name,
+                                        workspaceSlug:
+                                            w.workspaceSlug ||
+                                            w.workspace_slug ||
+                                            w.slug ||
+                                            "",
+                                        workspaceId: w.workspaceId,
+                                        embedId: w.embedId,
+                                        parentId: w.parentId,
+                                        syncedAt: w.syncedAt,
+                                        sowIds: w.sows?.map((s) => s.id) || [],
+                                    }))}
+                                    onSelectSOW={handleSelectDoc}
+                                    onCreateSOW={handleCreateSOW}
+                                    onDeleteSOW={handleDeleteDoc}
+                                    onRenameSOW={handleRenameSOW}
+                                    onMoveSOW={handleMoveSOW}
+                                    onCreateWorkspace={async (
+                                        name: string,
+                                        type?: "sow" | "client" | "generic",
+                                    ) => {
+                                        await handleCreateWorkspace(
+                                            name,
+                                            type || "sow",
+                                        );
+                                    }}
+                                    onDeleteWorkspace={handleDeleteWorkspace}
+                                    onRenameWorkspace={handleRenameWorkspace}
+                                />
+                                <DashboardRight
+                                    dashboardChatTarget={dashboardChatTarget}
+                                    onDashboardWorkspaceChange={
+                                        setDashboardChatTarget
+                                    }
+                                    availableWorkspaces={availableWorkspaces}
+                                />
+                            </div>
+                        )}
 
-                {viewMode === "editor" &&
-                    (currentDoc ? (
-                        <EditorPanel
-                            currentDoc={currentDoc}
-                            editorRef={editorRef}
-                            onContentChange={setLatestEditorJSON}
-                            handleUpdateDoc={(content: any) => {
-                                // Trigger auto-save by updating latestEditorJSON
-                                setLatestEditorJSON(content);
-                            }}
-                            onShare={handleShare}
-                            onExportPDF={handleExportPDF}
-                            onExportNewPDF={handleExportNewPDF}
-                            onExportExcel={undefined}
-                            onSharePortal={undefined}
-                            onOpenAIChat={handleOpenAIChat}
-                            isGrandTotalVisible={isGrandTotalVisible}
-                            toggleGrandTotal={setIsGrandTotalVisible}
-                            onCreateWorkspace={() => {
-                                setCreateWorkspaceType("sow");
-                                setCreateWorkspaceDialogOpen(true);
-                            }}
-                            isLoading={isLoading}
-                            workspaceCount={workspaces.length}
-                        />
-                    ) : (
-                        <HomeWelcome
-                            onCreateWorkspace={() => {
-                                setCreateWorkspaceType("sow");
-                                setCreateWorkspaceDialogOpen(true);
-                            }}
-                            onOpenOnboarding={() => setShowOnboarding(true)}
-                            workspaceCount={workspaces.length}
-                            isLoading={isLoading}
-                        />
-                    ))}
-                </>
+                        {viewMode === "editor" &&
+                            (currentDoc ? (
+                                <EditorPanel
+                                    currentDoc={currentDoc}
+                                    editorRef={editorRef}
+                                    onContentChange={setLatestEditorJSON}
+                                    handleUpdateDoc={(content: any) => {
+                                        // Trigger auto-save by updating latestEditorJSON
+                                        setLatestEditorJSON(content);
+                                    }}
+                                    onShare={handleShare}
+                                    onExportPDF={handleExportPDF}
+                                    onExportNewPDF={handleExportNewPDF}
+                                    onExportExcel={undefined}
+                                    onSharePortal={undefined}
+                                    onOpenAIChat={handleOpenAIChat}
+                                    isGrandTotalVisible={isGrandTotalVisible}
+                                    toggleGrandTotal={setIsGrandTotalVisible}
+                                    onCreateWorkspace={() => {
+                                        setCreateWorkspaceType("sow");
+                                        setCreateWorkspaceDialogOpen(true);
+                                    }}
+                                    isLoading={isLoading}
+                                    workspaceCount={workspaces.length}
+                                />
+                            ) : (
+                                <HomeWelcome
+                                    onCreateWorkspace={() => {
+                                        setCreateWorkspaceType("sow");
+                                        setCreateWorkspaceDialogOpen(true);
+                                    }}
+                                    onOpenOnboarding={() =>
+                                        setShowOnboarding(true)
+                                    }
+                                    workspaceCount={workspaces.length}
+                                    isLoading={isLoading}
+                                />
+                            ))}
+                    </>
                 }
                 rightPanel={
                     // Only show chat when in editor mode with a document, or in dashboard mode
-                    (viewMode === "editor" && currentDoc) || viewMode === "dashboard" ? (
+                    (viewMode === "editor" && currentDoc) ||
+                    viewMode === "dashboard" ? (
                         <WorkspaceChat
                             isOpen={agentSidebarOpen}
-                            onToggle={() => setAgentSidebarOpen(!agentSidebarOpen)}
+                            onToggle={() =>
+                                setAgentSidebarOpen(!agentSidebarOpen)
+                            }
                             chatMessages={chatMessages}
                             onSendMessage={handleSendMessage}
                             isLoading={isChatLoading}
                             streamingMessageId={streamingMessageId}
                             onInsertToEditor={handleInsertContent}
-                            editorWorkspaceSlug={currentDoc?.workspaceSlug || ""}
+                            editorWorkspaceSlug={
+                                currentDoc?.workspaceSlug || ""
+                            }
                             editorThreadSlug={currentDoc?.threadSlug}
                             onEditorThreadChange={handleEditorThreadChange}
                             onClearChat={() => setChatMessages([])}
@@ -2281,8 +2599,7 @@ export default function Page() {
                 onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
                 onToggleAiChat={() => setAgentSidebarOpen(!agentSidebarOpen)}
                 viewMode={viewMode}
-            >
-            </ResizableLayout>
+            ></ResizableLayout>
 
             <SendToClientModal
                 isOpen={showSendModal}

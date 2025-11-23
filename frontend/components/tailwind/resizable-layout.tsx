@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { ChevronLeft, ChevronRight, Menu, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, Sparkles } from "lucide-react";
 
 interface ResizableLayoutProps {
   leftPanel: React.ReactNode;
@@ -54,15 +54,16 @@ export function ResizableLayout({
   if (!mounted) return null;
 
   return (
-    <div className="h-screen w-screen flex flex-col relative">
+    <div className="h-screen w-screen flex flex-col relative" style={{height: '100vh'}}>
       {/* PERSISTENT LEFT SIDEBAR TOGGLE TAB - ALWAYS VISIBLE */}
       <button
         onClick={onToggleSidebar}
-        className={`fixed left-0 top-20 z-40 bg-[#1CBF79] hover:bg-[#15a366] text-black p-2 rounded-r-lg transition-all duration-300 shadow-lg ${sidebarOpen ? 'opacity-70' : ''}`}
-        title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-        aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+        className={`fixed left-4 top-16 z-40 bg-[#1CBF79] hover:bg-[#15a366] text-black p-2 rounded-lg transition-all duration-300 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1CBF79] focus:ring-offset-black`}
+        title={sidebarOpen ? 'Collapse' : 'Expand'}
+        aria-label={sidebarOpen ? 'Collapse' : 'Expand'}
+        aria-expanded={sidebarOpen}
       >
-        <Menu className="w-5 h-5" />
+        <ChevronUp strokeWidth={2} className={`w-5 h-5 transition-transform duration-300 ${sidebarOpen ? 'rotate-0' : 'rotate-180'}`} />
       </button>
 
       {/* PERSISTENT RIGHT SIDEBAR TOGGLE TAB - HIDDEN WHEN NO RIGHT PANEL OR IN AI MANAGEMENT */}
@@ -82,7 +83,7 @@ export function ResizableLayout({
         {/* LEFT SIDEBAR - FIXED WIDTH WHEN OPEN */}
         {sidebarOpen ? (
           <div
-            className="h-full overflow-y-auto overflow-x-hidden flex-shrink-0 border-r border-gray-700 transition-all duration-300"
+            className="h-full overflow-y-auto overflow-x-hidden flex-shrink-0 transition-all duration-300"
             style={{ width: '320px' }}
           >
             {leftPanel}

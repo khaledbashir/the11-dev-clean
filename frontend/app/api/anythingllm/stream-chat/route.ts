@@ -8,16 +8,13 @@ const apiKey =
     process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
 
 // Handle cases where env vars are set to 'undefined' string
-const effectiveBaseUrl =
-    baseUrl && baseUrl !== "undefined"
-        ? baseUrl
-        : "https://ahmad-anything-llm.840tjq.easypanel.host";
+const effectiveBaseUrl = baseUrl && baseUrl !== "undefined" ? baseUrl : "";
 
 // Security validation: Ensure API key is set
 const effectiveApiKey = apiKey && apiKey !== "undefined" ? apiKey : null;
-if (!effectiveApiKey) {
+if (!effectiveBaseUrl || !effectiveApiKey) {
     throw new Error(
-        "Security Error: ANYTHINGLLM_API_KEY environment variable is required but not set.",
+        "Security Error: AnythingLLM configuration missing. Set ANYTHINGLLM_URL and ANYTHINGLLM_API_KEY in environment.",
     );
 }
 

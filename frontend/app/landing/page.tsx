@@ -688,7 +688,7 @@ export default function LandingPage() {
               { icon: Settings, label: 'RESTful API' },
               { icon: Cloud, label: 'Cloud Deployment Ready' },
             ].map((feature, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-3 rounded-lg bg-[#1CBF79]/5 border border-[#1CBF79]/10">
+              <div key={`feature-${idx}-${feature.label}`} className="flex items-center gap-3 p-3 rounded-lg bg-[#1CBF79]/5 border border-[#1CBF79]/10">
                 <feature.icon className="w-5 h-5 text-[#1CBF79] flex-shrink-0" />
                 <span className="text-sm text-white">{feature.label}</span>
               </div>

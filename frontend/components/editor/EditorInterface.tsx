@@ -11,6 +11,7 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { CharacterCount } from "@tiptap/extension-character-count";
+import { ThinkingAccordion } from "./ThinkingAccordion";
 import {
     Bold,
     Italic,
@@ -475,6 +476,9 @@ const EditorInterface = forwardRef(
                     </Button>
                 </div>
             </div>
+
+            {/* AI Thinking Process Accordion */}
+            <ThinkingAccordion className="mx-2 mt-2" />
 
             <div className="flex-1 overflow-auto">
                 {isPreviewMode ? (

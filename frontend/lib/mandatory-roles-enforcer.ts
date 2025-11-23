@@ -77,6 +77,56 @@ function normalizeRoleName(name: string): string {
 }
 
 /**
+ * De-duplicate AI-suggested roles by normalized role name. When duplicates occur
+ * we prefer the entry with a non-empty description and the highest hours value.
+ *
+ * This helps avoid duplicate UI keys when AI-provided rows include the same ID
+ * or the same role multiple times. Returns a stable, deterministic set.
+ */
+function dedupeAiSuggestedRoles(rows: PricingRow[]): PricingRow[] {
+    const map = new Map<string, PricingRow>();
+
+    for (const row of rows) {
+        const key = normalizeRoleName(row.role || "");
+
+        // If role has no name at all, fallback to id-based key to keep
+        // uniqueness logic consistent with other safeguards.
+        const dedupeKey = key || row.id || generateRowId();
+
+        const existing = map.get(dedupeKey);
+
+        if (!existing) {
+            map.set(dedupeKey, { ...row });
+            continue;
+        }
+
+        // Prefer the entry with a non-empty description.
+        const existingHasDesc = (existing.description || "").trim().length > 0;
+        const rowHasDesc = (row.description || "").trim().length > 0;
+
+        let chosen = existing;
+
+        if (rowHasDesc && !existingHasDesc) {
+            chosen = row;
+        } else if (existingHasDesc && !rowHasDesc) {
+            chosen = existing;
+        } else {
+            // If both have (or both don't) descriptions, pick the one with higher hours.
+            const existingHours = Number(existing.hours || 0);
+            const rowHours = Number(row.hours || 0);
+            chosen = rowHours > existingHours ? row : existing;
+        }
+
+        // Preserve an ID if available; otherwise generate one.
+        chosen.id = chosen.id || existing.id || row.id || generateRowId();
+
+        map.set(dedupeKey, { ...chosen });
+    }
+
+    return Array.from(map.values());
+}
+
+/**
  * Check if a role is a management/oversight role that should be at the bottom
  * Includes: Account Management, Project Management (oversight), Directors, etc.
  */
@@ -170,6 +220,31 @@ function generateRowId(): string {
     return `row-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+// Exported helper: Ensure all row IDs in the provided array are unique.
+//
+// This function is intentionally exported so other modules (or tests) can use
+// it when they accept or manipulate arrays of PricingRow data. It mirrors the
+// internal duplication protection used in the enforcer while being available
+// publicly for external usage.
+export function ensureUniqueRowIds(rows: PricingRow[]): PricingRow[] {
+    const seen = new Set<string>();
+    return rows.map((r) => {
+        let id = (r && (r as any).id) || generateRowId();
+        if (!id || id.trim() === "") {
+            id = generateRowId();
+        }
+        if (seen.has(id)) {
+            const newId = generateRowId();
+            console.warn(
+                `⚠️ [Mandatory Enforcer] Duplicate row ID detected ("${id}"), generating new id: ${newId}`,
+            );
+            id = newId;
+        }
+        seen.add(id);
+        return { ...r, id };
+    });
+}
+
 /**
  * CORE ENFORCEMENT FUNCTION
  *
@@ -194,6 +269,23 @@ export function enforceMandatoryRoles(
     const middleRoles: PricingRow[] = [];
     const bottomRoles: PricingRow[] = [];
     const processedRoles = new Set<string>(); // Track to avoid duplicates
+
+    // 🔒 CRITICAL FIX: Ensure all row IDs are unique. AI-suggested IDs may be duplicated.
+    // We maintain a Set of used IDs and an ensureUniqueId helper that produces a
+    // new unique ID if the candidate is already taken (or empty).
+    const usedIds = new Set<string>();
+    const ensureUniqueId = (candidate?: string): string => {
+        let id = candidate?.toString() || generateRowId();
+        if (!id || id.trim() === "") {
+            id = generateRowId();
+        }
+        while (usedIds.has(id)) {
+            // Extremely unlikely but defensive: re-generate
+            id = generateRowId();
+        }
+        usedIds.add(id);
+        return id;
+    };
 
     console.log("🔒 [Mandatory Roles Enforcer] Starting enforcement...");
     console.log(`📥 [Enforcer] AI suggested ${aiSuggestedRoles.length} roles`);
@@ -241,6 +333,7 @@ export function enforceMandatoryRoles(
         }
 
         processedRoles.add(normalizeRoleName(mandatory.role));
+        const mandatoryRowId = ensureUniqueId(aiProvided?.id);
 
         console.log(
             `✅ [Enforcer] Mandatory role #${mandatory.order}: ${mandatory.role} ` +
@@ -248,7 +341,7 @@ export function enforceMandatoryRoles(
         );
 
         return {
-            id: generateRowId(),
+            id: mandatoryRowId,
             role: rateCardEntry.roleName, // ALWAYS use canonical name from Rate Card
             description: aiProvided?.description || mandatory.description,
             hours: validatedHours,
@@ -270,12 +363,16 @@ export function enforceMandatoryRoles(
         topRoles.push(createMandatoryRow(deliveryRole));
     }
 
-    // STEP 3: ADD OTHER AI-SUGGESTED ROLES
+    // STEP 3: ADD OTHER AI-SUGGESTED ROLES (DE-DUPLICATED)
+    // Deduplicate AI-suggested roles before processing. If duplicates are found,
+    // prefer the entry with higher hours or a non-empty description to minimize collisions.
+    const aiRoles = dedupeAiSuggestedRoles(aiSuggestedRoles);
+
     // Route them to either middle (technical) or bottom (management/oversight)
     let technicalRolesAdded = 0;
     let oversightRolesAdded = 0;
 
-    for (const aiRole of aiSuggestedRoles) {
+    for (const aiRole of aiRoles) {
         const normalizedAiRole = normalizeRoleName(aiRole.role);
 
         // Skip if this is a mandatory role (already processed)
@@ -303,7 +400,7 @@ export function enforceMandatoryRoles(
         const validatedHours = Math.max(0, Number(aiRole.hours) || 0);
 
         const additionalRow: PricingRow = {
-            id: aiRole.id || generateRowId(),
+            id: ensureUniqueId(aiRole.id),
             role: rateCardEntry.roleName, // ALWAYS use canonical name
             description: String(aiRole.description || "").trim(),
             hours: validatedHours,
@@ -341,7 +438,11 @@ export function enforceMandatoryRoles(
     }
 
     // STEP 5: COMBINE ALL SECTIONS IN ORDER
-    const result = [...topRoles, ...middleRoles, ...bottomRoles];
+    const result = ensureUniqueRowIds([
+        ...topRoles,
+        ...middleRoles,
+        ...bottomRoles,
+    ]);
 
     console.log(
         `🎯 [Enforcer] Enforcement complete: ` +

@@ -10,13 +10,18 @@ import { SOWItem, SOWScope, SOWData, ScopeSummary, ProjectTotals, CURRENCIES } f
  * @param currency - The currency code (USD, EUR, etc.)
  * @returns Formatted currency string
  */
-export const formatCurrency = (amount: number, currency: string): string => {
+export const formatCurrency = (
+  amount: number,
+  currency: string,
+  options: { includeGST?: boolean } = { includeGST: true }
+): string => {
   const currencyConfig = CURRENCIES[currency.toUpperCase()] || CURRENCIES.USD;
   const formatted = amount.toLocaleString('en-US', {
     minimumFractionDigits: currencyConfig.decimals,
     maximumFractionDigits: currencyConfig.decimals,
   });
-  return `${currencyConfig.symbol}${formatted}`;
+  const base = `${currencyConfig.symbol}${formatted}`;
+  return options.includeGST ? `${base} +GST` : base;
 };
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 
-// ✍️ Workspace SOW Editor Sidebar - Full-featured SOW generation with The Architect
+// ✍️ Enterprise-grade Workspace Chat - Polished SOW generation interface
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
@@ -17,6 +17,7 @@ import {
 } from "./ui/select";
 import {
     ChevronRight,
+    ChevronDown,
     Send,
     Bot,
     Plus,
@@ -30,11 +31,18 @@ import {
     Check,
     Save,
     Undo2,
+    Upload,
+    MessageSquare,
+    History,
+    Sparkles,
+    FileText,
+    ChevronUp,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { StreamingThoughtAccordion } from "./streaming-thought-accordion";
 import { cleanSOWContent } from "@/lib/export-utils";
+import { insertPricingToEditor } from "../../json-editor-conversion-fix";
 import {
     handleDocumentUploadAndPin,
     uploadAndPinSingleFile,
@@ -46,6 +54,7 @@ interface ChatMessage {
     role: "user" | "assistant" | "system";
     content: string;
     timestamp: number;
+    thinking?: string;
 }
 
 interface WorkspaceChatProps {
@@ -110,7 +119,7 @@ export default function WorkspaceChat({
 
     // 📎 ATTACHMENT STATE
     const [attachments, setAttachments] = useState<
-        Array<{ name: string; mime: string; contentString: string }>
+        Array<{ id: string; name: string; mime: string; contentString: string }>
     >([]);
     const [uploading, setUploading] = useState(false);
 
@@ -131,15 +140,64 @@ export default function WorkspaceChat({
     const documentUploadInputRef = useRef<HTMLInputElement>(null);
     const [showAllMessages, setShowAllMessages] = useState(false);
     const MAX_MESSAGES = 100; // windowing to reduce render cost
-    
-    // 🎯 Copy button state
+
+    // 🎯 Copy button & insert state
     const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
     const [copiedJsonId, setCopiedJsonId] = useState<string | null>(null);
+    const [insertingMessageId, setInsertingMessageId] = useState<string | null>(
+        null,
+    );
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: "auto" });
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatMessages]);
+
+    // Copy to clipboard functionality
+    const handleCopy = async (content: string, messageId: string) => {
+        try {
+            await navigator.clipboard.writeText(content);
+            setCopiedMessageId(messageId);
+            toast.success("Copied to clipboard");
+            setTimeout(() => setCopiedMessageId(null), 2000);
+        } catch (error) {
+            toast.error("Failed to copy");
+        }
+    };
+
+    // Helper function to strip reasoning and tool tags
+    const stripReasoningAndToolTags = (content: string): string => {
+        let cleanedContent = content;
+        cleanedContent = cleanedContent
+            .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+            .trim();
+        cleanedContent = cleanedContent
+            .replace(/<think>[\s\S]*?<\/think>/gi, "")
+            .trim();
+        cleanedContent = cleanedContent
+            .replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, "")
+            .trim();
+        cleanedContent = cleanedContent
+            .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+            .trim();
+        return cleanedContent;
+    };
+
+    // Insert with feedback
+    const handleInsertWithFeedback = (content: string, messageId: string) => {
+        setInsertingMessageId(messageId);
+        try {
+            const cleanedContent = stripReasoningAndToolTags(content);
+            insertPricingToEditor(cleanedContent, (formatted) => {
+                onInsertToEditor(formatted);
+            });
+            toast.success("Content inserted to editor");
+        } catch {
+            onInsertToEditor(content);
+            toast.warning("Inserted raw content");
+        }
+        setTimeout(() => setInsertingMessageId(null), 1000);
+    };
 
     // 🎯 Auto-collapse upload area when all files complete
     useEffect(() => {
@@ -149,10 +207,13 @@ export default function WorkspaceChat({
         }
 
         const allComplete = pendingFiles.every(
-            (f) => f.status === "success" || f.status === "error"
+            (f) => f.status === "success" || f.status === "error",
         );
         const hasActiveUploads = pendingFiles.some(
-            (f) => f.status === "uploading" || f.status === "pinning" || f.status === "pending"
+            (f) =>
+                f.status === "uploading" ||
+                f.status === "pinning" ||
+                f.status === "pending",
         );
 
         // Auto-collapse after all files complete (with delay to show completion state)
@@ -213,14 +274,19 @@ export default function WorkspaceChat({
                         );
                         if (response.ok) {
                             const data = await response.json();
-                            const mapped = (data.history || []).map((msg: any) => ({
-                                id: `msg-${msg.id || Date.now()}-${Math.random()}`,
-                                role: msg.role === "user" ? "user" : "assistant",
-                                content: msg.content || "",
-                                timestamp: new Date(
-                                    msg.createdAt || Date.now(),
-                                ).getTime(),
-                            }));
+                            const mapped = (data.history || []).map(
+                                (msg: any, index: number) => ({
+                                    id: `msg-${msg.id || "no-id"}-${index}`,
+                                    role:
+                                        msg.role === "user"
+                                            ? "user"
+                                            : "assistant",
+                                    content: msg.content || "",
+                                    timestamp: new Date(
+                                        msg.createdAt || Date.now(),
+                                    ).getTime(),
+                                }),
+                            );
                             onReplaceChatMessages(mapped);
                             console.log(
                                 "✅ Loaded thread history from AnythingLLM:",
@@ -229,7 +295,10 @@ export default function WorkspaceChat({
                             );
                         }
                     } catch (error) {
-                        console.warn("⚠️ Failed to load thread history:", error);
+                        console.warn(
+                            "⚠️ Failed to load thread history:",
+                            error,
+                        );
                     }
                 }
             }
@@ -330,7 +399,9 @@ export default function WorkspaceChat({
             const newThread = {
                 slug: newThreadSlug,
                 name: data.thread?.name || "New Chat",
-                id: data.thread?.id || Date.now(),
+                id:
+                    data.thread?.id ||
+                    `thread-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 createdAt: new Date().toISOString(),
             };
             setThreads((prev) => [newThread, ...prev]);
@@ -381,7 +452,7 @@ export default function WorkspaceChat({
             );
 
             const mapped = (data.history || []).map((msg: any) => ({
-                id: `msg-${msg.id || Date.now()}-${Math.random()}`,
+                id: `msg-${msg.id || Date.now()}-${msg.id || Math.random().toString(36).substr(2, 9)}`,
                 role: msg.role === "user" ? "user" : "assistant",
                 content: msg.content || "",
                 timestamp: new Date(msg.createdAt || Date.now()).getTime(),
@@ -444,9 +515,9 @@ export default function WorkspaceChat({
         const lastUserMessage = [...chatMessages]
             .reverse()
             .find((m) => m.role === "user");
-        
+
         const messageToRetry = lastUserMessage?.content || lastUserPrompt;
-        
+
         if (!messageToRetry.trim() || isLoading) {
             if (!messageToRetry.trim()) {
                 toast.error("No previous message to retry");
@@ -480,11 +551,19 @@ export default function WorkspaceChat({
     const handleCopyProse = async (content: string, messageId: string) => {
         // Remove JSON blocks and thinking tags for prose copy
         let proseContent = content;
-        proseContent = proseContent.replace(/```json[\s\S]*?```/gi, '').trim();
-        proseContent = proseContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-        proseContent = proseContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        proseContent = proseContent.replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, '').trim();
-        proseContent = proseContent.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+        proseContent = proseContent.replace(/```json[\s\S]*?```/gi, "").trim();
+        proseContent = proseContent
+            .replace(/<thinking>[\s\S]*?<\/thinking>/gi, "")
+            .trim();
+        proseContent = proseContent
+            .replace(/<think>[\s\S]*?<\/think>/gi, "")
+            .trim();
+        proseContent = proseContent
+            .replace(/<AI_THINK>[\s\S]*?<\/AI_THINK>/gi, "")
+            .trim();
+        proseContent = proseContent
+            .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+            .trim();
 
         try {
             await navigator.clipboard.writeText(proseContent);
@@ -623,6 +702,7 @@ export default function WorkspaceChat({
                     setAttachments((prev) => [
                         ...prev,
                         {
+                            id: `att-${Date.now()}-${Date.now().toString(36).substr(2, 9)}`,
                             name: file.name,
                             mime: file.type,
                             contentString,
@@ -640,8 +720,8 @@ export default function WorkspaceChat({
         }
     };
 
-    const removeAttachment = (index: number) => {
-        setAttachments((prev) => prev.filter((_, i) => i !== index));
+    const removeAttachment = (id: string) => {
+        setAttachments((prev) => prev.filter((att) => att.id !== id));
     };
 
     // Handle file selection (multiple files)
@@ -683,8 +763,8 @@ export default function WorkspaceChat({
 
                 return true;
             })
-            .map((file) => ({
-                id: `${Date.now()}-${Math.random()}`,
+            .map((file, index) => ({
+                id: `file-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
                 file,
                 status: "pending" as const,
                 progress: 0,
@@ -698,7 +778,9 @@ export default function WorkspaceChat({
     };
 
     // Document upload handler (legacy single-file support)
-    const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleDocumentUpload = async (
+        e: React.ChangeEvent<HTMLInputElement>,
+    ) => {
         handleFileSelection(e.target.files);
         // Reset input to allow selecting the same file again
         if (e.target) {
@@ -746,7 +828,9 @@ export default function WorkspaceChat({
     const handleBatchUpload = async () => {
         if (pendingFiles.length === 0 || !editorWorkspaceSlug) return;
 
-        const filesToUpload = pendingFiles.filter((f) => f.status === "pending");
+        const filesToUpload = pendingFiles.filter(
+            (f) => f.status === "pending",
+        );
         if (filesToUpload.length === 0) return;
 
         setUploading(true);
@@ -802,13 +886,8 @@ export default function WorkspaceChat({
 
         // Add summary message to chat
         if (successMessages.length > 0) {
-            const summaryMessage: {
-                id: string;
-                role: "user" | "assistant";
-                content: string;
-                timestamp: number;
-            } = {
-                id: Date.now().toString(),
+            const summaryMessage: ChatMessage = {
+                id: `upload-${Date.now()}-${Date.now().toString(36).substr(2, 9)}`,
                 role: "assistant",
                 content: `✅ ${successMessages.length} document(s) have been uploaded and pinned to the workspace. They are now available in the knowledge base:\n\n${successMessages.map((name) => `• ${name}`).join("\n")}`,
                 timestamp: Date.now(),
@@ -824,12 +903,21 @@ export default function WorkspaceChat({
                     content: msg.content,
                     timestamp: msg.timestamp,
                 }));
-            onReplaceChatMessages([...validMessages, summaryMessage]);
+
+            // Type cast summaryMessage to match expected type
+            const typedSummaryMessage = {
+                id: summaryMessage.id,
+                role: summaryMessage.role as "user" | "assistant",
+                content: summaryMessage.content,
+                timestamp: summaryMessage.timestamp,
+            };
+
+            onReplaceChatMessages([...validMessages, typedSummaryMessage]);
         }
 
         // 🎯 Auto-collapse upload area after all files complete
         const allComplete = pendingFiles.every(
-            (f) => f.status === "success" || f.status === "error"
+            (f) => f.status === "success" || f.status === "error",
         );
         if (allComplete) {
             // Auto-collapse after a brief delay to show completion
@@ -841,7 +929,9 @@ export default function WorkspaceChat({
         // Clear completed files after a delay (longer delay to allow user to see results)
         setTimeout(() => {
             setPendingFiles((prev) =>
-                prev.filter((f) => f.status !== "success" && f.status !== "error"),
+                prev.filter(
+                    (f) => f.status !== "success" && f.status !== "error",
+                ),
             );
             // Reset collapse state when all files are cleared
             setIsUploadAreaCollapsed(false);
@@ -860,7 +950,9 @@ export default function WorkspaceChat({
         const k = 1024;
         const sizes = ["Bytes", "KB", "MB", "GB"];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
+        return (
+            Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+        );
     };
 
     const insertText = (text: string) => {
@@ -928,715 +1020,731 @@ export default function WorkspaceChat({
 
     // Return JSX
     return (
-        <React.Fragment>
+        <>
             <div className="h-full w-full min-w-0 bg-[#0e0f0f] border-l border-[#0E2E33] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b border-[#0E2E33] bg-[#0e0f0f] flex-shrink-0">
-                <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-sm font-bold text-white truncate">
-                        Workspace Chat
-                    </h2>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <Button
-                            onClick={handleNewThread}
-                            className="bg-[#15a366] hover:bg-[#10a35a] text-white text-xs h-6 px-2 flex-shrink-0"
-                            size="sm"
-                            title="New chat thread for this SOW (does not create a new SOW)"
-                            aria-label="New chat thread for this SOW (does not create a new SOW)"
-                        >
-                            <Plus className="h-3 w-3" />
-                        </Button>
-                        <Button
-                            onClick={handleToggleThreads}
-                            className="bg-[#1c1c1c] hover:bg-[#222] text-white text-xs h-6 px-2 border border-[#2a2a2a] flex-shrink-0"
-                            size="sm"
-                            title="View threads"
-                        >
-                            📋
-                        </Button>
-                        <Button
-                            onClick={onToggle}
-                            className="bg-[#1c1c1c] hover:bg-[#222] text-white text-xs h-6 px-2 border border-[#2a2a2a] flex-shrink-0"
-                            size="sm"
-                            title="Hide chat panel"
-                        >
-                            <ChevronRight className="h-3 w-3" />
-                        </Button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Thread List */}
-            {showThreadList && (
-                <div className="bg-[#0E2E33] border-b border-[#0E2E33] max-h-48 overflow-y-auto">
-                    <div className="p-2 space-y-1">
-                        {threads.length === 0 ? (
-                            <div className="text-xs text-gray-300 px-2 py-3">
-                                No threads yet. Click "New Chat" to create one.
-                            </div>
-                        ) : (
-                            threads.map((thread) => (
-                                <div
-                                    key={thread.slug}
-                                    className={`group flex items-center gap-2 p-2 rounded text-xs transition-colors ${
-                                        currentThreadSlug === thread.slug
-                                            ? "bg-[#15a366] text-white"
-                                            : "text-gray-300 hover:bg-[#0e0f0f]"
-                                    }`}
-                                >
-                                    <button
-                                        onClick={() =>
-                                            handleSelectThread(thread.slug)
-                                        }
-                                        className="flex-1 text-left"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span>
-                                                {currentThreadSlug ===
-                                                thread.slug
-                                                    ? "●"
-                                                    : "○"}
-                                            </span>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="font-medium truncate">
-                                                    {thread.name}
-                                                </div>
-                                                <div className="text-[10px] opacity-60">
-                                                    {formatThreadDate(
-                                                        thread.createdAt,
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </button>
-                                    <button
-                                        onClick={() =>
-                                            handleDeleteThread(thread.slug)
-                                        }
-                                        className="opacity-0 group-hover:opacity-100 px-2 hover:text-red-400"
-                                        title="Delete thread"
-                                    >
-                                        🗑️
-                                    </button>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Persona Badge */}
-            <div className="p-3 border-b border-[#0E2E33]">
-                <div className="flex items-center gap-2 bg-[#0E2E33] px-3 py-2 rounded-md">
-                    <Bot className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm font-medium text-white">
-                        The Architect
-                    </span>
-                    <span className="ml-2 text-xs text-gray-400">
-                        SOW generation
-                    </span>
-                </div>
-            </div>
-
-            {/* Chat Messages - Scrollable Area */}
-            <ScrollArea className="flex-1 overflow-hidden">
-                <div className="p-5 space-y-5">
-                    {!showAllMessages && chatMessages.length > MAX_MESSAGES && (
-                        <div className="flex items-center justify-between text-xs text-gray-400 bg-[#0E2E33] border border-[#1b5e5e] px-3 py-2 rounded">
-                            <span>
-                                Showing last {MAX_MESSAGES} of{" "}
-                                {chatMessages.length} messages
-                            </span>
-                            <button
-                                onClick={() => setShowAllMessages(true)}
-                                className="underline hover:text-white"
+                {/* Header */}
+                <div className="p-4 border-b border-[#0E2E33] bg-[#0e0f0f] flex-shrink-0">
+                    <div className="flex items-center justify-between gap-3">
+                        <h2 className="text-sm font-bold text-white truncate">
+                            Workspace Chat
+                        </h2>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button
+                                onClick={handleNewThread}
+                                className="bg-[#15a366] hover:bg-[#10a35a] text-white text-xs h-6 px-2 flex-shrink-0"
+                                size="sm"
+                                title="New chat thread"
+                                aria-label="New chat thread"
                             >
-                                Show all
-                            </button>
+                                <MessageSquare className="h-3 w-3" />
+                            </Button>
+                            <Button
+                                onClick={handleToggleThreads}
+                                className="bg-[#1c1c1c] hover:bg-[#222] text-white text-xs h-6 px-2 border border-[#2a2a2a] flex-shrink-0"
+                                size="sm"
+                                title="View threads"
+                                aria-label="View threads"
+                            >
+                                <History className="h-3 w-3" />
+                            </Button>
+                            <Button
+                                onClick={onToggle}
+                                className="bg-[#1c1c1c] hover:bg-[#222] text-white text-xs h-6 px-2 border border-[#2a2a2a] flex-shrink-0"
+                                size="sm"
+                                title="Hide chat panel"
+                            >
+                                <ChevronRight className="h-3 w-3" />
+                            </Button>
                         </div>
-                    )}
-                    {chatMessages.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full py-8">
-                            <Bot className="h-16 w-16 text-gray-600 mb-3" />
-                            <p className="text-base text-gray-400">
-                                No messages yet
-                            </p>
-                        </div>
-                    ) : (
-                        (showAllMessages
-                            ? chatMessages
-                            : chatMessages.slice(-MAX_MESSAGES)
-                        ).map((msg) => {
-                            const shouldShowButton = msg.role === "assistant";
-                            const cleaned = cleanSOWContent(msg.content);
-                            const segments =
-                                msg.role === "assistant"
-                                    ? []
-                                    : [
-                                          {
-                                              type: "text" as const,
-                                              content: msg.content,
-                                          },
-                                      ];
+                    </div>
+                </div>
 
-                            return (
-                                <div
-                                    key={msg.id}
-                                    className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                                >
+                {/* Thread List */}
+                {showThreadList && (
+                    <div className="bg-[#0E2E33] border-b border-[#0E2E33] max-h-48 overflow-y-auto">
+                        <div className="p-2 space-y-1">
+                            {threads.length === 0 ? (
+                                <div className="text-xs text-gray-300 px-2 py-3">
+                                    No threads yet. Click "New Chat" to create
+                                    one.
+                                </div>
+                            ) : (
+                                threads.map((thread) => (
                                     <div
-                                        className={`relative w-full max-w-[85%] min-w-0 rounded-lg p-4 break-words whitespace-pre-wrap overflow-x-hidden ${
-                                            msg.role === "user"
-                                                ? "bg-[#0E2E33]/30 text-white border border-[#1b5e5e]"
-                                                : "bg-[#0E2E33] text-white border border-[#1b5e5e]"
+                                        key={thread.slug}
+                                        className={`group flex items-center gap-2 p-2 rounded text-xs transition-colors ${
+                                            currentThreadSlug === thread.slug
+                                                ? "bg-[#15a366] text-white"
+                                                : "text-gray-300 hover:bg-[#0e0f0f]"
                                         }`}
                                     >
-                                        {/* Show thinking section with streaming support */}
-                                        {msg.role === "assistant" && (
-                                            <div className="mb-4">
-                                                    <StreamingThoughtAccordion
-                                                    content={msg.content}
-                                                    messageId={msg.id}
-                                                    isStreaming={
-                                                        streamingMessageId ===
-                                                        msg.id
-                                                    }
-                                                    onInsertClick={(
-                                                        content,
-                                                    ) => {
-                                                        // Content already cleaned by StreamingThoughtAccordion's buildInsertPayload
-                                                        console.log(
-                                                            "📥 [WorkspaceChat] onInsertClick payload:",
-                                                            content,
-                                                        );
-                                                        onInsertToEditor(
-                                                            content,
-                                                        );
-                                                    }}
-                                                />
-                                            </div>
-                                        )}
-
-                                        {/* Content rendering for user messages only */}
-                                        <div className="space-y-3">
-                                            {segments.map((seg, i) => (
-                                                <ReactMarkdown
-                                                    key={i}
-                                                    remarkPlugins={[remarkGfm]}
-                                                    className="prose prose-invert max-w-none text-sm break-words whitespace-pre-wrap prose-pre:whitespace-pre-wrap prose-pre:overflow-x-auto"
-                                                >
-                                                    {seg.content}
-                                                </ReactMarkdown>
-                                            ))}
-                                        </div>
-
-                                        <div className="flex gap-2 mt-4 items-center">
-                                            <p className="text-xs mt-1 opacity-70 flex-1">
-                                                {formatTimestamp(msg.timestamp)}
-                                            </p>
-                                            
-                                            {/* 🎯 Action buttons for assistant messages */}
-                                            {msg.role === "assistant" && (
-                                                <div className="flex gap-1.5 items-center">
-                                                    {/* Copy Prose Button */}
-                                                    <button
-                                                        onClick={() => handleCopyProse(msg.content, msg.id)}
-                                                        className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
-                                                        title="Copy prose content"
-                                                    >
-                                                        {copiedMessageId === msg.id ? (
-                                                            <Check className="w-3.5 h-3.5 text-green-400" />
-                                                        ) : (
-                                                            <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
+                                        <button
+                                            onClick={() =>
+                                                handleSelectThread(thread.slug)
+                                            }
+                                            className="flex-1 text-left"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span>
+                                                    {currentThreadSlug ===
+                                                    thread.slug
+                                                        ? "●"
+                                                        : "○"}
+                                                </span>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium truncate">
+                                                        {thread.name}
+                                                    </div>
+                                                    <div className="text-[10px] opacity-60">
+                                                        {formatThreadDate(
+                                                            thread.createdAt,
                                                         )}
-                                                    </button>
-                                                    
-                                                    {/* Copy JSON Button (only if JSON exists) */}
-                                                    {/```json/i.test(msg.content) && (
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() =>
+                                                handleDeleteThread(thread.slug)
+                                            }
+                                            className="opacity-0 group-hover:opacity-100 px-2 hover:text-red-400"
+                                            title="Delete thread"
+                                        >
+                                            🗑️
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Persona header removed to save vertical space */}
+
+                {/* Chat Messages - Scrollable Area */}
+                <ScrollArea className="flex-1 overflow-hidden">
+                    <div className="p-5 space-y-5">
+                        {!showAllMessages &&
+                            chatMessages.length > MAX_MESSAGES && (
+                                <div className="flex items-center justify-between text-xs text-gray-400 bg-[#0E2E33] border border-[#1b5e5e] px-3 py-2 rounded">
+                                    <span>
+                                        Showing last {MAX_MESSAGES} of{" "}
+                                        {chatMessages.length} messages
+                                    </span>
+                                    <button
+                                        onClick={() => setShowAllMessages(true)}
+                                        className="underline hover:text-white"
+                                    >
+                                        Show all
+                                    </button>
+                                </div>
+                            )}
+                        {chatMessages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full py-8">
+                                <Bot className="h-16 w-16 text-gray-600 mb-3" />
+                                <p className="text-base text-gray-400">
+                                    No messages yet
+                                </p>
+                            </div>
+                        ) : (
+                            (showAllMessages
+                                ? chatMessages
+                                : chatMessages.slice(-MAX_MESSAGES)
+                            ).map((msg, idx) => {
+                                const isAssistant = msg.role === "assistant";
+                                const cleaned = cleanSOWContent(msg.content);
+
+                                // Emit segments when we do not have a full structured message (legacy)
+                                const segments =
+                                    msg.role === "assistant"
+                                        ? []
+                                        : [
+                                              {
+                                                  type: "text" as const,
+                                                  content: msg.content,
+                                              },
+                                          ];
+
+                                return (
+                                    <div
+                                        key={msg.id}
+                                        className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                    >
+                                        <div
+                                            className={`relative w-full max-w-[85%] min-w-0 rounded-lg p-4 break-words whitespace-pre-wrap overflow-x-hidden ${
+                                                msg.role === "user"
+                                                    ? "bg-[#0E2E33]/30 text-white border border-[#1b5e5e]"
+                                                    : "bg-[#0E2E33] text-white border border-[#1b5e5e]"
+                                            }`}
+                                        >
+                                            {/* Assistant thinking / reasoning (streaming) */}
+                                            {isAssistant && (
+                                                <div className="mb-4">
+                                                    <StreamingThoughtAccordion
+                                                        content={msg.content}
+                                                        messageId={msg.id}
+                                                        isStreaming={
+                                                            streamingMessageId ===
+                                                            msg.id
+                                                        }
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Message content (for user messages or fallback rendering) */}
+                                            <div className="space-y-3">
+                                                {segments.map((seg, i) => (
+                                                    <ReactMarkdown
+                                                        key={`${msg.id}-segment-${i}`}
+                                                        remarkPlugins={[
+                                                            remarkGfm,
+                                                        ]}
+                                                        className="prose prose-invert max-w-none text-sm break-words whitespace-pre-wrap prose-pre:whitespace-pre-wrap prose-pre:overflow-x-auto"
+                                                    >
+                                                        {seg.content}
+                                                    </ReactMarkdown>
+                                                ))}
+                                            </div>
+
+                                            {/* Footer + action buttons */}
+                                            <div className="flex gap-2 mt-4 items-center">
+                                                <p className="text-xs mt-1 opacity-70 flex-1">
+                                                    {formatTimestamp(
+                                                        msg.timestamp,
+                                                    )}
+                                                </p>
+
+                                                {msg.role === "assistant" && (
+                                                    <div className="flex gap-1.5 items-center">
+                                                        {/* Copy Prose Button */}
                                                         <button
-                                                            onClick={() => handleCopyJSON(msg.content, msg.id)}
+                                                            onClick={() =>
+                                                                handleCopyProse(
+                                                                    msg.content,
+                                                                    msg.id,
+                                                                )
+                                                            }
                                                             className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
-                                                            title="Copy JSON block"
+                                                            title="Copy prose content"
                                                         >
-                                                            {copiedJsonId === msg.id ? (
+                                                            {copiedMessageId ===
+                                                            msg.id ? (
                                                                 <Check className="w-3.5 h-3.5 text-green-400" />
                                                             ) : (
                                                                 <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
                                                             )}
                                                         </button>
+
+                                                        {/* Copy JSON Button (only if JSON exists) */}
+                                                        {/```json/i.test(
+                                                            msg.content,
+                                                        ) && (
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleCopyJSON(
+                                                                        msg.content,
+                                                                        msg.id,
+                                                                    )
+                                                                }
+                                                                className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
+                                                                title="Copy JSON block"
+                                                            >
+                                                                {copiedJsonId ===
+                                                                msg.id ? (
+                                                                    <Check className="w-3.5 h-3.5 text-green-400" />
+                                                                ) : (
+                                                                    <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
+                                                                )}
+                                                            </button>
+                                                        )}
+
+                                                        {/* Insert or Insert with feedback */}
+                                                        <button
+                                                            onClick={() =>
+                                                                handleInsertWithFeedback(
+                                                                    cleaned,
+                                                                    msg.id,
+                                                                )
+                                                            }
+                                                            className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors"
+                                                            title="Insert this response only"
+                                                        >
+                                                            {insertingMessageId ===
+                                                            msg.id ? (
+                                                                <Loader2 className="w-4 h-4 text-gray-300 animate-spin" />
+                                                            ) : (
+                                                                <Plus className="w-3.5 h-3.5 text-gray-400" />
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+
+                        {/* 🎯 Thinking UI - Show when AI is generating */}
+                        {/* Streaming Thought Accordion for current response */}
+                        {streamingMessageId && (
+                            <div className="flex gap-3 justify-start">
+                                <div className="relative w-full max-w-[85%] min-w-0 rounded-lg p-4 bg-[#0E2E33] text-white border border-[#1b5e5e]">
+                                    <StreamingThoughtAccordion
+                                        content={
+                                            chatMessages.find(
+                                                (m) =>
+                                                    m.id === streamingMessageId,
+                                            )?.content || ""
+                                        }
+                                        isStreaming={true}
+                                        messageId={streamingMessageId}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div ref={chatEndRef} />
+                    </div>
+                </ScrollArea>
+
+                {/* Input Area */}
+                <div className="p-5 border-t border-[#0E2E33] bg-[#0e0f0f] space-y-3">
+                    {/* Pending Files List with Drag-and-Drop */}
+                    {pendingFiles.length > 0 && !isUploadAreaHidden && (
+                        <div className="space-y-2">
+                            {/* 🎯 Collapsible Header */}
+                            <div className="flex items-center justify-between">
+                                <div className="text-xs text-gray-400 font-medium">
+                                    {pendingFiles.length} file(s){" "}
+                                    {isUploadAreaCollapsed
+                                        ? "uploaded"
+                                        : "ready to upload"}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() =>
+                                            setIsUploadAreaCollapsed(
+                                                !isUploadAreaCollapsed,
+                                            )
+                                        }
+                                        className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1"
+                                        title={
+                                            isUploadAreaCollapsed
+                                                ? "Expand upload area"
+                                                : "Collapse upload area"
+                                        }
+                                    >
+                                        {isUploadAreaCollapsed
+                                            ? "▼ Expand"
+                                            : "▲ Collapse"}
+                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            setIsUploadAreaHidden(true)
+                                        }
+                                        className="text-xs text-gray-400 hover:text-red-400 transition-colors px-2 py-1"
+                                        title="Hide upload area to see chat better"
+                                    >
+                                        ✕ Hide
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* 🎯 Collapsible Content */}
+                            {!isUploadAreaCollapsed && (
+                                <div className="space-y-2">
+                                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                        {pendingFiles.map((fileProgress) => (
+                                            <div
+                                                key={fileProgress.id}
+                                                className="flex items-center gap-2 bg-[#0E2E33] px-3 py-2 rounded text-xs border border-[#1b5e5e]"
+                                            >
+                                                {/* Status Icon */}
+                                                <div className="flex-shrink-0">
+                                                    {fileProgress.status ===
+                                                        "pending" && (
+                                                        <div className="w-4 h-4 rounded-full border-2 border-gray-400" />
+                                                    )}
+                                                    {fileProgress.status ===
+                                                        "uploading" && (
+                                                        <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                                                    )}
+                                                    {fileProgress.status ===
+                                                        "pinning" && (
+                                                        <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
+                                                    )}
+                                                    {fileProgress.status ===
+                                                        "success" && (
+                                                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                                    )}
+                                                    {fileProgress.status ===
+                                                        "error" && (
+                                                        <AlertCircle className="w-4 h-4 text-red-500" />
                                                     )}
                                                 </div>
-                                            )}
-                                            
-                                            {/* 🎯 Retry button for user messages (if it's the last user message) */}
-                                            {msg.role === "user" && 
-                                             chatMessages[chatMessages.length - 1]?.id === msg.id && (
-                                                <button
-                                                    onClick={handleRetry}
-                                                    disabled={isLoading}
-                                                    className="p-1.5 hover:bg-[#1b5e5e] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    title="Retry this message"
-                                                >
-                                                    <RotateCcw className="w-3.5 h-3.5 text-gray-400 hover:text-white" />
-                                                </button>
-                                            )}
-                                        </div>
+
+                                                {/* File Info */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="truncate text-white font-medium">
+                                                            {
+                                                                fileProgress
+                                                                    .file.name
+                                                            }
+                                                        </span>
+                                                        <span className="text-gray-400 flex-shrink-0">
+                                                            {formatFileSize(
+                                                                fileProgress
+                                                                    .file.size,
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                    {/* Progress Bar */}
+                                                    {(fileProgress.status ===
+                                                        "uploading" ||
+                                                        fileProgress.status ===
+                                                            "pinning") && (
+                                                        <div className="mt-1.5 w-full bg-[#1b1b1e] rounded-full h-1">
+                                                            <div
+                                                                className="bg-[#15a366] h-1 rounded-full transition-all duration-300"
+                                                                style={{
+                                                                    width: `${fileProgress.progress}%`,
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    {/* Status Text */}
+                                                    <div className="mt-1 text-[10px] text-gray-400">
+                                                        {fileProgress.status ===
+                                                            "pending" &&
+                                                            "Ready to upload"}
+                                                        {fileProgress.status ===
+                                                            "uploading" &&
+                                                            `Uploading... ${fileProgress.progress}%`}
+                                                        {fileProgress.status ===
+                                                            "pinning" &&
+                                                            "Pinning to workspace..."}
+                                                        {fileProgress.status ===
+                                                            "success" && (
+                                                            <span className="text-green-400">
+                                                                ✅ Uploaded &
+                                                                pinned
+                                                                {fileProgress.wordCount &&
+                                                                    ` • ${fileProgress.wordCount} words`}
+                                                                {fileProgress.tokenCount &&
+                                                                    ` • ~${fileProgress.tokenCount} tokens`}
+                                                            </span>
+                                                        )}
+                                                        {fileProgress.status ===
+                                                            "error" && (
+                                                            <span className="text-red-400">
+                                                                ❌{" "}
+                                                                {fileProgress.error ||
+                                                                    "Upload failed"}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Remove Button */}
+                                                {(fileProgress.status ===
+                                                    "pending" ||
+                                                    fileProgress.status ===
+                                                        "error") && (
+                                                    <button
+                                                        onClick={() =>
+                                                            removePendingFile(
+                                                                fileProgress.id,
+                                                            )
+                                                        }
+                                                        className="flex-shrink-0 p-1 hover:bg-[#1b1b1e] rounded transition-colors"
+                                                        title="Remove file"
+                                                    >
+                                                        <X className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
+
+                                    {/* Upload Button */}
+                                    {pendingFiles.some(
+                                        (f) => f.status === "pending",
+                                    ) && (
+                                        <Button
+                                            onClick={handleBatchUpload}
+                                            disabled={
+                                                uploading ||
+                                                !editorWorkspaceSlug
+                                            }
+                                            size="sm"
+                                            className="w-full bg-[#15a366] hover:bg-[#10a35a] text-white text-sm font-semibold"
+                                        >
+                                            {uploading ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                    Uploading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Paperclip className="h-4 w-4 mr-2" />
+                                                    Upload{" "}
+                                                    {
+                                                        pendingFiles.filter(
+                                                            (f) =>
+                                                                f.status ===
+                                                                "pending",
+                                                        ).length
+                                                    }{" "}
+                                                    Document(s)
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
                                 </div>
-                            );
-                        })
-                    )}
-                    
-                    {/* 🎯 Thinking UI - Show when AI is generating */}
-                    {isLoading && (
-                        <div className="flex gap-3 justify-start">
-                            <div className="relative w-full max-w-[85%] min-w-0 rounded-lg p-4 bg-[#0E2E33] text-white border border-[#1b5e5e]">
-                                <div className="space-y-3">
-                                    {/* Thinking Accordion */}
-                                    <div className="bg-[#0e0f0f] border border-[#1b5e5e] rounded-lg overflow-hidden">
-                                        <div className="px-4 py-3 bg-[#0E2E33] border-b border-[#1b5e5e]">
-                                            <div className="flex items-center gap-2">
-                                                <Loader2 className="h-4 w-4 animate-spin text-[#1CBF79]" />
-                                                <span className="text-sm font-medium text-white">AI is thinking...</span>
-                                            </div>
-                                        </div>
-                                        <div className="px-4 py-3 space-y-2">
-                                            <div className="flex items-center gap-2 text-xs text-gray-400">
-                                                <div className="w-1.5 h-1.5 bg-[#1CBF79] rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
-                                                <span>Analyzing your request...</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs text-gray-400">
-                                                <div className="w-1.5 h-1.5 bg-[#1CBF79] rounded-full animate-pulse" style={{ animationDelay: '200ms' }}></div>
-                                                <span>Checking rate card and budget...</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-xs text-gray-400">
-                                                <div className="w-1.5 h-1.5 bg-[#1CBF79] rounded-full animate-pulse" style={{ animationDelay: '400ms' }}></div>
-                                                <span>Drafting SOW content...</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                            )}
+
+                            {/* 🎯 Collapsed Summary View */}
+                            {isUploadAreaCollapsed && (
+                                <div className="flex items-center gap-2 text-xs text-gray-400 bg-[#0E2E33]/30 px-3 py-2 rounded border border-[#1b5e5e]">
+                                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                    <span className="flex-1">
+                                        {
+                                            pendingFiles.filter(
+                                                (f) => f.status === "success",
+                                            ).length
+                                        }{" "}
+                                        uploaded,{" "}
+                                        {
+                                            pendingFiles.filter(
+                                                (f) => f.status === "error",
+                                            ).length
+                                        }{" "}
+                                        failed
+                                    </span>
+                                    <button
+                                        onClick={handleDocumentUploadClick}
+                                        className="text-[#15a366] hover:underline flex items-center gap-1 flex-shrink-0"
+                                    >
+                                        <Paperclip className="w-3.5 h-3.5" />
+                                        <span>Add more</span>
+                                    </button>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     )}
-                    
-                    <div ref={chatEndRef} />
-                </div>
-            </ScrollArea>
 
-            {/* Sticky Action Bar - Outside ScrollArea, Always Visible */}
-            {(() => {
-                const lastAssistant = [...chatMessages]
-                    .reverse()
-                    .find((m) => m.role === "assistant");
-                if (!lastAssistant) return null;
-                return (
-                    <div className="flex-shrink-0 border-t border-[#1b5e5e] bg-[#0E2E33]/95 backdrop-blur-md p-4">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-xs text-gray-400">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                Latest AI response ready
-                            </div>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 px-4 text-xs font-medium border-[#1CBF79] text-[#1CBF79] hover:text-white hover:bg-[#1CBF79] transition-all duration-200"
-                                title="Insert the latest AI response into your SOW editor"
-                                onClick={() => {
-                                    // Strip thinking tags before inserting
-                                    let cleaned = lastAssistant.content;
-                                    cleaned = cleaned.replace(
-                                        /<thinking>([\s\S]*?)<\/thinking>/gi,
-                                        "",
-                                    );
-                                    cleaned = cleaned.replace(
-                                        /<think>([\s\S]*?)<\/think>/gi,
-                                        "",
-                                    );
-                                    cleaned = cleaned.replace(
-                                        /<AI_THINK>([\s\S]*?)<\/AI_THINK>/gi,
-                                        "",
-                                    );
-                                    cleaned = cleaned.replace(
-                                        /<tool_call>[\s\S]*?<\/tool_call>/gi,
-                                        "",
-                                    );
-                                    const trimmed = cleaned.trim();
-                                    if (!trimmed) {
-                                        toast.error("No content to insert. The AI response appears to be empty or contains only internal processing tags.");
-                                        return;
-                                    }
-                                    onInsertToEditor(trimmed);
-                                }}
+                    {/* Collapsible Attachments / Drag and Drop Area */}
+                    {/* Small toggle to hide/expand the upload area for a cleaner UI */}
+                    <div className="flex items-center justify-between px-2 py-1 gap-2">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() =>
+                                    setIsUploadAreaHidden(!isUploadAreaHidden)
+                                }
+                                className="flex items-center gap-2 text-sm text-gray-300 hover:text-white"
+                                title={
+                                    isUploadAreaHidden
+                                        ? "Show attachments"
+                                        : "Hide attachments"
+                                }
                             >
-                                <svg
-                                    className="w-3 h-3 mr-1.5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                    />
-                                </svg>
-                                Insert SOW
-                            </Button>
+                                <span className="truncate">Attachments</span>
+                                {isUploadAreaHidden ? (
+                                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                                ) : (
+                                    <ChevronUp className="w-4 h-4 text-gray-400" />
+                                )}
+                            </button>
+                            <span className="text-xs text-gray-500 ml-1">
+                                {pendingFiles.length > 0
+                                    ? `${pendingFiles.filter((f) => f.status === "success").length} uploaded`
+                                    : ""}
+                            </span>
                         </div>
                     </div>
-                );
-            })()}
 
-            {/* Input Area */}
-            <div className="p-5 border-t border-[#0E2E33] bg-[#0e0f0f] space-y-3">
-                {/* Pending Files List with Drag-and-Drop */}
-                {pendingFiles.length > 0 && !isUploadAreaHidden && (
-                    <div className="space-y-2">
-                        {/* 🎯 Collapsible Header */}
-                        <div className="flex items-center justify-between">
-                            <div className="text-xs text-gray-400 font-medium">
-                                {pendingFiles.length} file(s) {isUploadAreaCollapsed ? "uploaded" : "ready to upload"}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setIsUploadAreaCollapsed(!isUploadAreaCollapsed)}
-                                    className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1"
-                                    title={isUploadAreaCollapsed ? "Expand upload area" : "Collapse upload area"}
-                                >
-                                    {isUploadAreaCollapsed ? "▼ Expand" : "▲ Collapse"}
-                                </button>
-                                <button
-                                    onClick={() => setIsUploadAreaHidden(true)}
-                                    className="text-xs text-gray-400 hover:text-red-400 transition-colors px-2 py-1"
-                                    title="Hide upload area to see chat better"
-                                >
-                                    ✕ Hide
-                                </button>
+                    {/* Drag and Drop Area: only show when not hidden and not collapsed */}
+                    {!isUploadAreaCollapsed && !isUploadAreaHidden && (
+                        <div
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            onDrop={handleDrop}
+                            className={`border-2 border-dashed rounded-lg transition-all duration-300 ${
+                                pendingFiles.length > 0
+                                    ? "p-2 border-[#0E2E33]/30 bg-transparent"
+                                    : "p-4 border-[#0E2E33] bg-transparent"
+                            } ${isDragOver ? "border-[#15a366] bg-[#0E2E33]/50" : ""}`}
+                        >
+                            <div
+                                className={`text-center text-sm text-gray-400 transition-all ${
+                                    pendingFiles.length > 0 ? "text-xs" : ""
+                                }`}
+                            >
+                                {pendingFiles.length === 0 ? (
+                                    <>
+                                        <Paperclip className="w-5 h-5 mx-auto mb-2 opacity-50" />
+                                        <span>
+                                            Drag and drop documents here, or{" "}
+                                            <button
+                                                onClick={
+                                                    handleDocumentUploadClick
+                                                }
+                                                className="text-[#15a366] hover:underline"
+                                            >
+                                                click to browse
+                                            </button>
+                                        </span>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            PDF, Word, or text files (max 50MB
+                                            each)
+                                        </div>
+                                    </>
+                                ) : (
+                                    <button
+                                        onClick={handleDocumentUploadClick}
+                                        className="text-[#15a366] hover:underline flex items-center gap-1 justify-center"
+                                    >
+                                        <Paperclip className="w-3.5 h-3.5" />
+                                        <span>Add more documents</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
-                        
-                        {/* 🎯 Collapsible Content */}
-                        {!isUploadAreaCollapsed && (
-                            <div className="space-y-2">
-                                <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                            {pendingFiles.map((fileProgress) => (
+                    )}
+
+                    {/* Show Upload Area Button - appears when upload area is hidden */}
+                    {isUploadAreaHidden && pendingFiles.length > 0 && (
+                        <div className="flex items-center justify-between bg-[#0E2E33]/30 border border-[#1b5e5e] rounded px-3 py-2">
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <Paperclip className="w-4 h-4" />
+                                <span>
+                                    {pendingFiles.length} file(s) hidden -{" "}
+                                    {
+                                        pendingFiles.filter(
+                                            (f) => f.status === "success",
+                                        ).length
+                                    }{" "}
+                                    uploaded
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setIsUploadAreaHidden(false);
+                                    setIsUploadAreaCollapsed(false);
+                                }}
+                                className="text-xs text-[#15a366] hover:text-[#10a35a] hover:underline transition-colors px-2 py-1"
+                                title="Show upload area"
+                            >
+                                Show
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Attachments Preview */}
+                    {attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                            {attachments.map((att) => (
                                 <div
-                                    key={fileProgress.id}
-                                    className="flex items-center gap-2 bg-[#0E2E33] px-3 py-2 rounded text-xs border border-[#1b5e5e]"
+                                    key={att.id}
+                                    className="flex items-center gap-2 bg-[#0E2E33] px-3 py-1.5 rounded text-xs text-gray-300"
                                 >
-                                    {/* Status Icon */}
-                                    <div className="flex-shrink-0">
-                                        {fileProgress.status === "pending" && (
-                                            <div className="w-4 h-4 rounded-full border-2 border-gray-400" />
-                                        )}
-                                        {fileProgress.status === "uploading" && (
-                                            <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                                        )}
-                                        {fileProgress.status === "pinning" && (
-                                            <Loader2 className="w-4 h-4 animate-spin text-yellow-400" />
-                                        )}
-                                        {fileProgress.status === "success" && (
-                                            <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                        )}
-                                        {fileProgress.status === "error" && (
-                                            <AlertCircle className="w-4 h-4 text-red-500" />
-                                        )}
-                                    </div>
-
-                                    {/* File Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="truncate text-white font-medium">
-                                                {fileProgress.file.name}
-                                            </span>
-                                            <span className="text-gray-400 flex-shrink-0">
-                                                {formatFileSize(fileProgress.file.size)}
-                                            </span>
-                                        </div>
-                                        {/* Progress Bar */}
-                                        {(fileProgress.status === "uploading" ||
-                                            fileProgress.status === "pinning") && (
-                                            <div className="mt-1.5 w-full bg-[#1b1b1e] rounded-full h-1">
-                                                <div
-                                                    className="bg-[#15a366] h-1 rounded-full transition-all duration-300"
-                                                    style={{
-                                                        width: `${fileProgress.progress}%`,
-                                                    }}
-                                                />
-                                            </div>
-                                        )}
-                                        {/* Status Text */}
-                                        <div className="mt-1 text-[10px] text-gray-400">
-                                            {fileProgress.status === "pending" &&
-                                                "Ready to upload"}
-                                            {fileProgress.status === "uploading" &&
-                                                `Uploading... ${fileProgress.progress}%`}
-                                            {fileProgress.status === "pinning" &&
-                                                "Pinning to workspace..."}
-                                            {fileProgress.status === "success" && (
-                                                <span className="text-green-400">
-                                                    ✅ Uploaded & pinned
-                                                    {fileProgress.wordCount &&
-                                                        ` • ${fileProgress.wordCount} words`}
-                                                    {fileProgress.tokenCount &&
-                                                        ` • ~${fileProgress.tokenCount} tokens`}
-                                                </span>
-                                            )}
-                                            {fileProgress.status === "error" && (
-                                                <span className="text-red-400">
-                                                    ❌ {fileProgress.error || "Upload failed"}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Remove Button */}
-                                    {(fileProgress.status === "pending" ||
-                                        fileProgress.status === "error") && (
-                                        <button
-                                            onClick={() =>
-                                                removePendingFile(fileProgress.id)
-                                            }
-                                            className="flex-shrink-0 p-1 hover:bg-[#1b1b1e] rounded transition-colors"
-                                            title="Remove file"
-                                        >
-                                            <X className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-                                        </button>
-                                    )}
+                                    <span className="truncate max-w-[150px]">
+                                        {att.name}
+                                    </span>
+                                    <button
+                                        onClick={() => removeAttachment(att.id)}
+                                        className="hover:text-red-500"
+                                    >
+                                        ×
+                                    </button>
                                 </div>
                             ))}
                         </div>
+                    )}
 
-                            {/* Upload Button */}
-                            {pendingFiles.some((f) => f.status === "pending") && (
-                                <Button
-                                    onClick={handleBatchUpload}
-                                    disabled={uploading || !editorWorkspaceSlug}
-                                    size="sm"
-                                    className="w-full bg-[#15a366] hover:bg-[#10a35a] text-white text-sm font-semibold"
-                                >
-                                    {uploading ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                            Uploading...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Paperclip className="h-4 w-4 mr-2" />
-                                            Upload {pendingFiles.filter((f) => f.status === "pending").length} Document(s)
-                                        </>
-                                    )}
-                                </Button>
-                            )}
-                        </div>
-                        )}
-                        
-                        {/* 🎯 Collapsed Summary View */}
-                        {isUploadAreaCollapsed && (
-                            <div className="flex items-center gap-2 text-xs text-gray-400 bg-[#0E2E33]/30 px-3 py-2 rounded border border-[#1b5e5e]">
-                                <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                <span className="flex-1">
-                                    {pendingFiles.filter(f => f.status === "success").length} uploaded,{" "}
-                                    {pendingFiles.filter(f => f.status === "error").length} failed
-                                </span>
-                                <button
-                                    onClick={handleDocumentUploadClick}
-                                    className="text-[#15a366] hover:underline flex items-center gap-1 flex-shrink-0"
-                                >
-                                    <Paperclip className="w-3.5 h-3.5" />
-                                    <span>Add more</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Drag and Drop Area - Hidden when collapsed or hidden, minimized when files exist, full when empty */}
-                {!isUploadAreaCollapsed && !isUploadAreaHidden && (
-                    <div
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        className={`border-2 border-dashed rounded-lg transition-all duration-300 ${
-                            pendingFiles.length > 0
-                                ? "p-2 border-[#0E2E33]/30 bg-transparent"
-                                : "p-4 border-[#0E2E33] bg-transparent"
-                        } ${
-                            isDragOver
-                                ? "border-[#15a366] bg-[#0E2E33]/50"
-                                : ""
-                        }`}
-                    >
-                        <div className={`text-center text-sm text-gray-400 transition-all ${
-                            pendingFiles.length > 0
-                                ? "text-xs"
-                                : ""
-                        }`}>
-                            {pendingFiles.length === 0 ? (
-                                <>
-                                    <Paperclip className="w-5 h-5 mx-auto mb-2 opacity-50" />
-                                    <span>
-                                        Drag and drop documents here, or{" "}
-                                        <button
-                                            onClick={handleDocumentUploadClick}
-                                            className="text-[#15a366] hover:underline"
-                                        >
-                                            click to browse
-                                        </button>
-                                    </span>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                        PDF, Word, or text files (max 50MB each)
+                    {/* Chat Input */}
+                    <div className="flex gap-3">
+                        <div className="flex-1 space-y-2">
+                            <div className="relative">
+                                <div className="flex items-end gap-2 w-full">
+                                    <div className="flex-1 relative">
+                                        <Textarea
+                                            ref={chatInputRef}
+                                            value={chatInput}
+                                            onChange={(e) =>
+                                                setChatInput(e.target.value)
+                                            }
+                                            onKeyDown={handleKeyPress}
+                                            placeholder="Type /help for commands..."
+                                            className="min-h-[46px] max-h-[150px] resize-none text-sm bg-[#0E2E33] border-[#0E2E33] text-white placeholder:text-gray-400 rounded-full pr-4 pl-4"
+                                        />
                                     </div>
-                                </>
-                            ) : (
-                                <button
-                                    onClick={handleDocumentUploadClick}
-                                    className="text-[#15a366] hover:underline flex items-center gap-1 justify-center"
-                                >
-                                    <Paperclip className="w-3.5 h-3.5" />
-                                    <span>Add more documents</span>
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
 
-                {/* Show Upload Area Button - appears when upload area is hidden */}
-                {isUploadAreaHidden && pendingFiles.length > 0 && (
-                    <div className="flex items-center justify-between bg-[#0E2E33]/30 border border-[#1b5e5e] rounded px-3 py-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                            <Paperclip className="w-4 h-4" />
-                            <span>
-                                {pendingFiles.length} file(s) hidden - {pendingFiles.filter(f => f.status === "success").length} uploaded
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => {
-                                setIsUploadAreaHidden(false);
-                                setIsUploadAreaCollapsed(false);
-                            }}
-                            className="text-xs text-[#15a366] hover:text-[#10a35a] hover:underline transition-colors px-2 py-1"
-                            title="Show upload area"
-                        >
-                            Show
-                        </button>
-                    </div>
-                )}
+                                    {/* Enhance button - positioned adjacent to send button */}
+                                    <button
+                                        onClick={handleEnhanceOnly}
+                                        disabled={
+                                            !chatInput.trim() ||
+                                            isLoading ||
+                                            enhancing
+                                        }
+                                        className="flex items-center justify-center p-3 rounded-full bg-[#1b1b1e] hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-[#1CBF79]/30 hover:border-[#1CBF79] shadow-lg"
+                                        title="Enhance your prompt with AI"
+                                    >
+                                        {enhancing ? (
+                                            <Loader2 className="h-4 w-4 animate-spin text-[#1CBF79]" />
+                                        ) : (
+                                            <Sparkles className="w-4 h-4 text-[#1CBF79]" />
+                                        )}
+                                    </button>
 
-                {/* Attachments Preview */}
-                {attachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                        {attachments.map((att, idx) => (
-                            <div
-                                key={idx}
-                                className="flex items-center gap-2 bg-[#0E2E33] px-3 py-1.5 rounded text-xs text-gray-300"
-                            >
-                                <span className="truncate max-w-[150px]">
-                                    {att.name}
-                                </span>
-                                <button
-                                    onClick={() => removeAttachment(idx)}
-                                    className="hover:text-red-500"
-                                >
-                                    ×
-                                </button>
+                                    <button
+                                        onClick={handleSendMessage}
+                                        disabled={
+                                            !chatInput.trim() || isLoading
+                                        }
+                                        className="flex items-center justify-center bg-[#15a366] hover:bg-[#13a45b] p-3 rounded-full shadow-lg disabled:opacity-50 transition-colors"
+                                        title="Send"
+                                    >
+                                        {isLoading ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                        ) : (
+                                            <Send className="w-4 h-4 text-white" />
+                                        )}
+                                    </button>
+                                </div>
                             </div>
-                        ))}
-                    </div>
-                )}
 
-                {/* Chat Input */}
-                <div className="flex gap-3">
-                    <div className="flex-1 space-y-2">
-                        <div className="relative">
-                            <Textarea
-                                ref={chatInputRef}
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                onKeyPress={handleKeyPress}
-                                placeholder="Type /help for commands..."
-                                className="min-h-[50px] max-h-[150px] resize-none text-sm bg-[#0E2E33] border-[#0E2E33] text-white placeholder:text-gray-400 rounded-lg pr-12"
-                            />
+                            <div className="flex gap-2 mt-2">
+                                {/* File attachment input (for inline attachments) */}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    multiple
+                                    onChange={handleFileSelect}
+                                    className="hidden"
+                                    accept="image/*,.pdf,.txt,.doc,.docx"
+                                />
 
-                            {/* Enhance button - positioned inside textarea */}
-                            <button
-                                onClick={handleEnhanceOnly}
-                                disabled={
-                                    !chatInput.trim() || isLoading || enhancing
-                                }
-                                className="absolute right-3 top-3 p-1.5 rounded-md bg-[#1b1b1e] hover:bg-[#2a2a2a] disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-[#1CBF79]/30 hover:border-[#1CBF79]/60"
-                                title="Enhance your prompt with AI"
-                            >
-                                {enhancing ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1CBF79]" />
-                                ) : (
-                                    <span className="text-[#1CBF79] text-sm">
-                                        ✨
-                                    </span>
-                                )}
-                            </button>
-                        </div>
+                                {/* Document upload input (for workspace document upload) - Multiple files */}
+                                <input
+                                    ref={documentUploadInputRef}
+                                    type="file"
+                                    multiple
+                                    onChange={handleDocumentUpload}
+                                    className="hidden"
+                                    accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+                                    disabled={uploading}
+                                />
 
-                        <div className="flex gap-2 mt-2">
-                            {/* File attachment input (for inline attachments) */}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                multiple
-                                onChange={handleFileSelect}
-                                className="hidden"
-                                accept="image/*,.pdf,.txt,.doc,.docx"
-                            />
-
-                            {/* Document upload input (for workspace document upload) - Multiple files */}
-                            <input
-                                ref={documentUploadInputRef}
-                                type="file"
-                                multiple
-                                onChange={handleDocumentUpload}
-                                className="hidden"
-                                accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
-                                disabled={uploading}
-                            />
-
-                            {/* Document upload button */}
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-12 w-12 p-0 border border-[#0E2E33] hover:bg-[#1b1b1e]"
-                                onClick={handleDocumentUploadClick}
-                                disabled={uploading || !editorWorkspaceSlug}
-                                title="Upload document to workspace (PDF, Word, Text)"
-                            >
-                                {uploading ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                ) : (
-                                    <Paperclip className="h-5 w-5" />
-                                )}
-                            </Button>
-
-                            {/* Send button - full width, prominent */}
-                            <Button
-                                onClick={handleSendMessage}
-                                disabled={!chatInput.trim() || isLoading}
-                                size="sm"
-                                className="flex-1 bg-[#15a366] hover:bg-[#10a35a] text-white h-12 font-semibold border-0 text-base"
-                                title="Send message to The Architect"
-                            >
-                                {isLoading ? (
-                                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                                ) : (
-                                    <Send className="h-5 w-5 mr-2" />
-                                )}
-                                {isLoading ? "Generating..." : "Send"}
-                            </Button>
+                                {/* Remove duplicate full-width send; rely on compact send button next to input */}
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-        </React.Fragment>
+        </>
     );
 }

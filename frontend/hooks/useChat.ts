@@ -17,7 +17,7 @@ export function useChat({
     currentAgentId: string | null;
     currentDoc: Document | undefined;
     editorRef: React.RefObject<any>;
-    }) {
+}) {
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [isChatLoading, setIsChatLoading] = useState(false);
     const [streamingMessageId, setStreamingMessageId] = useState<string | null>(
@@ -25,7 +25,9 @@ export function useChat({
     );
     const [lastUserPrompt, setLastUserPrompt] = useState<string>("");
     const [userPromptDiscount, setUserPromptDiscount] = useState<number>(0);
-    const [multiScopePricingData, setMultiScopePricingData] = useState<any | null>(null);
+    const [multiScopePricingData, setMultiScopePricingData] = useState<
+        any | null
+    >(null);
 
     useEffect(() => {
         // Load thread history when document context changes
@@ -42,12 +44,14 @@ export function useChat({
                 );
 
                 if (history && history.length > 0) {
-                    const messages: ChatMessage[] = history.map((msg: any) => ({
-                        id: `msg${Date.now()}-${Math.random()}`,
-                        role: msg.role === "user" ? "user" : "assistant",
-                        content: msg.content,
-                        timestamp: Date.now(),
-                    }));
+                    const messages: ChatMessage[] = history.map(
+                        (msg: any, index: number) => ({
+                            id: `msg-${msg.id || Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+                            role: msg.role === "user" ? "user" : "assistant",
+                            content: msg.content,
+                            timestamp: Date.now(),
+                        }),
+                    );
                     setChatMessages(messages);
                 } else {
                     setChatMessages([]);
@@ -88,8 +92,7 @@ Please wait while the connection is established...`,
             };
 
             setChatMessages((prev) => prev.concat(welcomeMessage));
-        }
-        else if (
+        } else if (
             viewMode === "dashboard" &&
             chatMessages.length === 0 &&
             !isHistoryRestored
@@ -109,7 +112,12 @@ Ask me questions to get business insights, such as:
 
             setChatMessages((prev) => prev.concat(welcomeMessage));
         }
-    }, [viewMode, isHistoryRestored, currentDoc?.threadSlug, currentDoc?.workspaceSlug]);
+    }, [
+        viewMode,
+        isHistoryRestored,
+        currentDoc?.threadSlug,
+        currentDoc?.workspaceSlug,
+    ]);
 
     // Clear temporary welcome message when real thread is ready
     useEffect(() => {
@@ -119,13 +127,17 @@ Ask me questions to get business insights, such as:
             chatMessages.length > 0
         ) {
             const welcomeMessage = chatMessages.find(
-                (msg) => msg.id.startsWith("welcome-") && msg.content.includes("Setting up your SOW workspace")
+                (msg) =>
+                    msg.id.startsWith("welcome-") &&
+                    msg.content.includes("Setting up your SOW workspace"),
             );
-            
+
             if (welcomeMessage) {
                 setChatMessages((prev) => {
-                    const filtered = prev.filter((msg) => msg.id !== welcomeMessage.id);
-                    
+                    const filtered = prev.filter(
+                        (msg) => msg.id !== welcomeMessage.id,
+                    );
+
                     // Add a ready message
                     const readyMessage: ChatMessage = {
                         id: `ready-${Date.now()}`,
@@ -137,14 +149,14 @@ Your SOW thread is now connected to SOW Generator workspace. I'm ready to help y
 What would you like to work on today?`,
                         timestamp: Date.now(),
                     };
-                    
+
                     return [...filtered, readyMessage];
                 });
             }
         }
     }, [currentDoc?.threadSlug]);
 
-// Clear messages when switching to a different document/thread
+    // Clear messages when switching to a different document/thread
     useEffect(() => {
         // Only clear if we're switching to a different document (not just re-rendering)
         // and we don't already have messages for this document
@@ -169,7 +181,9 @@ What would you like to work on today?`,
 
         // Check if thread is a temporary one (starts with "temp-")
         if (!threadSlug || threadSlug.startsWith("temp-")) {
-            toast.error("Please wait a moment while the SOW thread is being created...");
+            toast.error(
+                "Please wait a moment while the SOW thread is being created...",
+            );
             return;
         }
 
@@ -194,7 +208,6 @@ What would you like to work on today?`,
         setStreamingMessageId(assistantMessageId);
 
         try {
-
             await anythingLLM.streamChatWithThread(
                 workspaceSlug,
                 threadSlug,
@@ -206,7 +219,10 @@ What would you like to work on today?`,
                             setChatMessages((prev) =>
                                 prev.map((msg) =>
                                     msg.id === assistantMessageId
-                                        ? { ...msg, content: msg.content + data.text }
+                                        ? {
+                                              ...msg,
+                                              content: msg.content + data.text,
+                                          }
                                         : msg,
                                 ),
                             );

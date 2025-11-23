@@ -20,12 +20,13 @@ app = FastAPI(title="Social Garden PDF & Sheets Service")
 
 # Enable CORS for frontend requests
 # 🔒 Security: Only allow requests from our frontend domain
-# For local dev, add "http://localhost:3000" to the list
+# Local dev: include common ports (3000 and 3333)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://sow-generator.socialgarden.com.au",
-        "http://localhost:3000",  # Local development
+        "http://localhost:3000",
+        "http://localhost:3333",
     ],
     allow_credentials=True,
     allow_methods=["*"],

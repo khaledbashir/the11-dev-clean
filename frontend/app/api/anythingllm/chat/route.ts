@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ANYTHINGLLM_URL =
-    process.env.NEXT_PUBLIC_ANYTHINGLLM_URL ||
-    "https://ahmad-anything-llm.840tjq.easypanel.host";
-const ANYTHINGLLM_API_KEY = process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY;
+const ANYTHINGLLM_URL = process.env.ANYTHINGLLM_URL || process.env.NEXT_PUBLIC_ANYTHINGLLM_URL || "";
+const ANYTHINGLLM_API_KEY = process.env.ANYTHINGLLM_API_KEY || process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY || "";
 
 // Security validation: Ensure API key is set
-if (!ANYTHINGLLM_API_KEY) {
-    throw new Error(
-        "Security Error: ANYTHINGLLM_API_KEY environment variable is required but not set.",
-    );
+if (!ANYTHINGLLM_URL || !ANYTHINGLLM_API_KEY) {
+    throw new Error("Security Error: AnythingLLM configuration missing. Set ANYTHINGLLM_URL and ANYTHINGLLM_API_KEY in environment.");
 }
 
 export async function POST(request: NextRequest) {

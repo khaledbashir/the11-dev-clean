@@ -567,7 +567,7 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
                   <div className="grid grid-cols-4 gap-1.5">
                     {quickActions.map((action, idx) => (
                       <Button
-                        key={idx}
+                        key={`ai-action-${idx}-${action.prompt.substring(0, 15)}`}
                         size="sm"
                         className="h-8 text-xs flex flex-col items-center justify-center gap-0.5 bg-[#161B22] hover:bg-[#21262D] text-gray-300 hover:text-white border border-[#30363D] transition-colors"
                         onClick={() => {

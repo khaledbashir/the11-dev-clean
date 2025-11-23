@@ -219,9 +219,9 @@ export function EnhancedDashboard(props: EnhancedDashboardProps = {}) {
               </div>
               <div className="space-y-4">
                 {stats.recentActivity && stats.recentActivity.length > 0 ? (
-                  stats.recentActivity.map((activity, idx) => (
+                  stats.recentActivity.map((activity) => (
                     <div 
-                      key={idx} 
+                      key={activity.id} 
                       className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-4 hover:border-blue-400/50 transition-colors"
                     >
                       <div className="font-semibold text-white">{activity.clientName}</div>
@@ -258,8 +258,8 @@ export function EnhancedDashboard(props: EnhancedDashboardProps = {}) {
               </div>
               <div className="space-y-3">
                 {stats.topClients && stats.topClients.length > 0 ? (
-                  stats.topClients.map((client, idx) => (
-                    <div key={idx} className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-4">
+                  stats.topClients.map((client) => (
+                    <div key={client.name} className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="font-semibold text-white">{client.name}</div>
                         <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded">
@@ -287,8 +287,8 @@ export function EnhancedDashboard(props: EnhancedDashboardProps = {}) {
               </div>
               <div className="space-y-3">
                 {stats.popularServices && stats.popularServices.length > 0 ? (
-                  stats.popularServices.map((service, idx) => (
-                    <div key={idx} className="space-y-2">
+                  stats.popularServices.map((service) => (
+                    <div key={service.service} className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-white font-medium">{service.service}</span>
                         <span className="text-gray-400">{service.count}x</span>

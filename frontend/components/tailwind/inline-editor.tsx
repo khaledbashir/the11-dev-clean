@@ -573,7 +573,7 @@ Please generate content that fits naturally at the cursor position, considering 
                     <div className="fixed left-1/2 -translate-x-1/2 mt-2 w-[548px] bg-white/90 rounded-xl border border-[#1FE18E]/30 shadow-lg z-50 backdrop-blur-sm max-h-60 overflow-y-auto" style={{bottom: 'calc(100vh - 280px)'}}>
                       {getVisibleQuickActions().map((action, idx) => (
                         <button
-                          key={idx}
+                          key={`action-${idx}-${action.prompt.substring(0, 20)}`}
                           onClick={() => {
                             handleQuickAction(action.prompt);
                             setShowActionsDropdown(false);

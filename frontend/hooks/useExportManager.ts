@@ -395,9 +395,9 @@ export function useExportManager({ currentDoc = null, editorRef = null }: UseExp
 
             // Call embedding API
             const success = await anythingLLM.embedSOWDocument(
+                workspaceSlug,
                 currentDoc.title || currentDoc.id,
                 htmlContent,
-                workspaceSlug,
             );
 
             toast.dismiss(toastId);

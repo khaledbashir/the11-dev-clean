@@ -107,9 +107,9 @@ export function ConversationHistoryPanel({
               <p className="text-xs text-gray-500 mt-2">Start a new chat to begin</p>
             </div>
           ) : (
-            conversations.map((conversation) => (
+            conversations.map((conversation, index) => (
               <div
-                key={conversation.id}
+                key={`${conversation.id}-${index}`}
                 className={`group relative rounded-lg p-3 cursor-pointer transition-colors ${
                   activeConversationId === conversation.id
                     ? 'bg-emerald-600/30 border border-emerald-600'

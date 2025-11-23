@@ -145,7 +145,7 @@ export function convertAIResponseToPricingRows(
         // Add scope header row (non-editable) if this is multi-scope
         if (scopes.length > 1 && scope.scope_name) {
             rows.push({
-                id: `scope-header-${Date.now()}-${Math.random()}`,
+                id: `scope-header-${Date.now()}-${Date.now().toString(36).substr(2, 9)}`,
                 role: `📍 Scope: ${scope.scope_name}`,
                 description: scope.scope_description || "",
                 hours: 0,

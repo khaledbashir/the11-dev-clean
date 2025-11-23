@@ -47,9 +47,7 @@ function validateDiscount(discount: any): number {
 }
 
 // Backend service URL
-const BACKEND_PDF_SERVICE_URL =
-    process.env.NEXT_PUBLIC_PDF_SERVICE_URL ||
-    "https://ahmad-socialgarden-backend.840tjq.easypanel.host";
+const BACKEND_PDF_SERVICE_URL = process.env.PDF_SERVICE_URL || process.env.NEXT_PUBLIC_PDF_SERVICE_URL || "";
 
 export async function POST(request: NextRequest) {
     try {
@@ -66,6 +64,9 @@ export async function POST(request: NextRequest) {
             );
 
             // Route to professional PDF endpoint
+            if (!BACKEND_PDF_SERVICE_URL) {
+                throw new Error("PDF service not configured. Set PDF_SERVICE_URL or NEXT_PUBLIC_PDF_SERVICE_URL");
+            }
             const response = await fetch(
                 `${BACKEND_PDF_SERVICE_URL}/generate-professional-pdf`,
                 {

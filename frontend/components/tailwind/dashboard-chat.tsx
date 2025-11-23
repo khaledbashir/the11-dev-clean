@@ -607,7 +607,7 @@ export default function DashboardChat({
                         (showAllMessages
                             ? chatMessages
                             : chatMessages.slice(-MAX_MESSAGES)
-                        ).map((msg) => {
+                        ).map((msg, idx) => {
                             const cleaned = cleanSOWContent(msg.content);
                             const segments =
                                 msg.role === "assistant"

@@ -1,440 +1,561 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { ChevronDown } from "lucide-react";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Button } from "./ui/button";
+import React, {
+    useState,
+    useEffect,
+    useMemo,
+    useCallback,
+    useRef,
+} from "react";
+import { ChevronDown, FileText, DollarSign, Brain } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { cleanSOWContent } from "@/lib/export-utils";
 
 interface StreamingThoughtAccordionProps {
-  content: string; // Full content including <think> tags
-  isStreaming?: boolean; // Whether this message is currently streaming
-  messageId?: string; // Unique message ID for tracking
-  onThinkingExtracted?: (thinking: string) => void;
-  onInsertClick?: (content: string) => void; // Callback when Insert button clicked
+    content: string;
+    isStreaming?: boolean;
+    messageId?: string;
+    onThinkingExtracted?: (thinking: string) => void;
+    onInsertClick?: (content: string) => void;
 }
 
 export function StreamingThoughtAccordion({
-  content,
-  isStreaming = false,
-  messageId,
-  onThinkingExtracted,
-  onInsertClick,
+    content,
+    isStreaming = false,
+    messageId,
+    onThinkingExtracted,
 }: StreamingThoughtAccordionProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [displayedThinking, setDisplayedThinking] = useState<string>("");
-  const streamTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Build the full insert payload: original content with internal-only sections removed,
-  // preserving the original order of the visible narrative and any JSON blocks.
-  const buildInsertPayload = useMemo(() => {
-    if (!content) return '';
-    let cleaned = content;
-    // Remove internal-only blocks but leave JSON in place to preserve order
-    const variants = [
-      { open: /<thinking>/gi, close: /<\/thinking>/gi },
-      { open: /<think>/gi, close: /<\/think>/gi },
-      { open: /<AI_THINK>/gi, close: /<\/AI_THINK>/gi },
-    ];
-    for (const v of variants) {
-      const regex = new RegExp(`${v.open.source}([\n\s\S]*?)${v.close.source}`, 'gi');
-      cleaned = cleaned.replace(regex, '').trim();
-    }
-    // Remove tool_call wrappers entirely
-    cleaned = cleaned.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
-    // Keep any ```json code fences as-is so the editor can parse pricing
-    
-    // Log payload contents for debugging
-    const hasJsonBlock = /```json/i.test(cleaned);
-    const hasNarrative = cleaned.replace(/```json[\s\S]*?```/gi, '').trim().length > 0;
-    console.log('📦 [Accordion] buildInsertPayload:', {
-      totalLength: cleaned.length,
-      hasJsonBlock,
-      hasNarrative,
-      preview: cleaned.substring(0, 200),
-    });
-    
-    return cleaned;
-  }, [content]);
-  
-  // ⚠️ CRITICAL FIX: Extract thinking ONCE per actual content change
-  // useMemo ensures this only runs when content actually changes, not on every render/re-stream chunk
-  const { thinking, actualContent, jsonBlock } = useMemo(() => {
-    console.log('🔍 [Accordion] Processing content:', {
-      contentLength: content?.length || 0,
-      contentPreview: content?.substring(0, 100) || '',
-      hasThinkTag: content?.includes('<think>') || false,
-    });
-    
-    // Support multiple internal thinking tag variants
-    // CRITICAL: Build regex patterns correctly to match thinking tags
-    const variants = [
-      { pattern: /<thinking>([\s\S]*?)<\/thinking>/gi, name: 'thinking' },
-      { pattern: /<think>([\s\S]*?)<\/think>/gi, name: 'think' },
-      { pattern: /<AI_THINK>([\s\S]*?)<\/AI_THINK>/gi, name: 'ai_think' },
-    ];
+    const [isThinkingOpen, setIsThinkingOpen] = useState(false);
+    const [displayedThinking, setDisplayedThinking] = useState<string>("");
+    const streamTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Collect all thinking contents in order
-    let extractedThinkingParts: string[] = [];
-    let cleanedContent = content;
+    // Process content once per change
+    const { thinking, cleanContent, pricingBlocks } = useMemo(() => {
+        if (!content)
+            return { thinking: "", cleanContent: "", pricingBlocks: [] };
 
-    for (const v of variants) {
-      // Use matchAll to get all matches at once (more reliable than regex.exec loop)
-      const matches = Array.from(content.matchAll(v.pattern));
-      for (const match of matches) {
-        const inner = (match[1] || '').trim();
-        if (inner) {
-          extractedThinkingParts.push(inner);
-          console.log(`✅ [Accordion] Found ${v.name} tag:`, inner.substring(0, 50) + '...');
-        }
-      }
-      // Remove this variant from visible content
-      cleanedContent = cleanedContent.replace(v.pattern, '').trim();
-    }
+        console.log("🔍 [Accordion] Processing content:", {
+            contentLength: content.length,
+            messageId,
+        });
 
-    // Also strip tool_call blocks from visible content
-    cleanedContent = cleanedContent.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+        // Extract thinking content
+        const thinkingPatterns = [
+            /<thinking>([\s\S]*?)<\/thinking>/gi,
+            /<think>([\s\S]*?)<\/think>/gi,
+            /<AI_THINK>([\s\S]*?)<\/AI_THINK>/gi,
+        ];
 
-    const extractedThinking = extractedThinkingParts.join('\n\n');
+        let extractedThinking = "";
+        let workingContent = content;
 
-    // Extract JSON code block (must be ```json ... ```) 
-  const jsonMatch = cleanedContent.match(/```json\s*([\s\S]*?)\s*```/);
-    let extractedJsonBlock = null as any;
-    if (jsonMatch && jsonMatch[1]) {
-      try {
-        extractedJsonBlock = JSON.parse(jsonMatch[1]);
-        console.log('✅ [Accordion] JSON block extracted:', extractedJsonBlock);
-        // Remove JSON from markdown
-        cleanedContent = cleanedContent.replace(jsonMatch[0], '').trim();
-      } catch (e) {
-        console.warn('⚠️ [Accordion] Could not parse JSON block:', e);
-        extractedJsonBlock = null;
-      }
-    }
-
-    if (extractedThinking) {
-      console.log('🎯 [Accordion] THINKING EXTRACTED (messageId: ' + messageId + '):', {
-        thinkingLength: extractedThinking.length,
-        thinkingPreview: extractedThinking.substring(0, 100),
-        hasThinkingContent: extractedThinking.length > 0
-      });
-    } else {
-      console.log('⚠️ [Accordion] NO THINKING EXTRACTED (messageId: ' + messageId + ')');
-    }
-
-    console.log('📄 [Accordion] Cleaned content:', {
-      cleanedLength: cleanedContent?.length || 0,
-      cleanedPreview: cleanedContent?.substring(0, 100) || '',
-    });
-
-    return { thinking: extractedThinking, actualContent: cleanedContent, jsonBlock: extractedJsonBlock };
-  }, [content, messageId]);
-
-  // Handle thinking extraction callback (memoized to prevent infinite loops)
-  const handleThinkingExtracted = useCallback(() => {
-    if (onThinkingExtracted && thinking) {
-      onThinkingExtracted(thinking);
-    }
-  }, [thinking, onThinkingExtracted]);
-
-  // 📊 Lifecycle tracking: Log mount/unmount to detect redundant component creation
-  useEffect(() => {
-    console.log(`📊 [Accordion] MOUNTED (messageId: ${messageId})`);
-    return () => {
-      console.log(`📊 [Accordion] UNMOUNTED (messageId: ${messageId})`);
-    };
-  }, [messageId]);
-
-  // Stream the thinking display character by character (separate effect)
-  useEffect(() => {
-    // Clean up any pending timeout from previous render
-    if (streamTimeoutRef.current) {
-      clearTimeout(streamTimeoutRef.current);
-      streamTimeoutRef.current = null;
-    }
-
-    // Stream the thinking display character by character
-    if (thinking && isStreaming) {
-      setDisplayedThinking("");
-      let currentIndex = 0;
-
-      const streamThinking = () => {
-        if (currentIndex < thinking.length) {
-          setDisplayedThinking((prev) => prev + thinking[currentIndex]);
-          currentIndex++;
-          // Typing speed - adjust for faster/slower effect
-          const delay = Math.random() * 20 + 10; // 10-30ms between chars
-          streamTimeoutRef.current = setTimeout(streamThinking, delay);
-        }
-      };
-
-      streamThinking();
-    } else if (thinking) {
-      setDisplayedThinking(thinking);
-    }
-
-    // Cleanup timeout on unmount or when thinking changes
-    return () => {
-      if (streamTimeoutRef.current) {
-        clearTimeout(streamTimeoutRef.current);
-        streamTimeoutRef.current = null;
-      }
-    };
-  }, [thinking, isStreaming]);
-
-  // Call callback when thinking is extracted
-  useEffect(() => {
-    handleThinkingExtracted();
-  }, [handleThinkingExtracted]);
-
-  // If no content at all, show nothing
-  if (!actualContent && !thinking && !jsonBlock) {
-    return null;
-  }
-
-  // If only JSON block (no narrative), just show the accordion
-  if (!actualContent && jsonBlock) {
-    return (
-      <div className="w-full space-y-2">
-        <details
-          className="border border-[#20e28f] rounded-lg overflow-hidden bg-[#0a0a0a] group cursor-pointer"
-          open={isOpen}
-          onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
-        >
-          <summary className="cursor-pointer px-4 py-3 bg-[#20e28f]/10 hover:bg-[#20e28f]/20 transition-colors text-sm font-semibold flex items-center gap-2 select-none list-none">
-            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 flex-shrink-0" />
-            <span className="text-[#20e28f]">📊</span>
-            <span>Structured JSON</span>
-            <span className="text-xs text-gray-400 ml-auto">Pricing Data</span>
-          </summary>
-          <div className="px-4 py-3 bg-[#000000]/50 border-t border-[#20e28f]/30">
-            <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto mb-3">
-              {JSON.stringify(jsonBlock, null, 2)}
-            </pre>
-            <Button
-              onClick={() => {
-                // Insert the full visible payload (which, in this case, is just the JSON block)
-                if (!buildInsertPayload || !buildInsertPayload.trim()) {
-                  console.warn("⚠️ [Accordion] Cannot insert: payload is empty");
-                  return;
+        for (const pattern of thinkingPatterns) {
+            const matches = Array.from(workingContent.matchAll(pattern));
+            for (const match of matches) {
+                const inner = (match[1] || "").trim();
+                if (inner) {
+                    extractedThinking +=
+                        (extractedThinking ? "\n\n" : "") + inner;
                 }
-                onInsertClick?.(buildInsertPayload);
-              }}
-              className="w-full bg-[#20e28f] hover:bg-[#1db876] text-black font-semibold py-2 px-3 rounded"
-            >
-              ✅ Insert into Editor
-            </Button>
-          </div>
-        </details>
-      </div>
-    );
-  }
+            }
+            workingContent = workingContent.replace(pattern, "").trim();
+        }
 
-  // If only thinking (no narrative or JSON), show just the thinking accordion
-  if (!actualContent && thinking) {
-    return (
-      <div className="w-full space-y-3">
-        <details
-          className="border border-[#1b5e5e] rounded-lg overflow-hidden bg-[#0a0a0a] group cursor-pointer"
-          open={isOpen}
-          onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
-        >
-          <summary className="cursor-pointer px-4 py-3 bg-[#1b5e5e]/20 hover:bg-[#1b5e5e]/30 transition-colors text-sm font-semibold flex items-center gap-2 select-none list-none">
-            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 flex-shrink-0" />
-            <span className="text-yellow-400">🧠</span>
-            <span>
-              {isStreaming ? "AI Thinking..." : "AI Reasoning"}
-              {isStreaming && <span className="ml-2 inline-flex gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" style={{ animationDelay: "0.2s" }}></span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" style={{ animationDelay: "0.4s" }}></span>
-              </span>}
-            </span>
-            <span className="text-xs text-gray-400 ml-auto">Transparency Mode</span>
-          </summary>
-          <div className="px-4 py-3 bg-[#000000]/50 border-t border-[#1b5e5e]/30">
-            <div className="text-xs text-gray-300 whitespace-pre-wrap font-mono leading-relaxed max-h-[300px] overflow-y-auto">
-              <span>{displayedThinking}</span>
-              {isStreaming && displayedThinking.length < thinking.length && (
-                <span className="animate-pulse text-gray-500">_</span>
-              )}
-            </div>
-          </div>
-        </details>
-      </div>
-    );
-  }
+        // Remove tool calls
+        workingContent = workingContent
+            .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+            .trim();
 
-  // If thinking + narrative (with or without JSON): render full layout
-  return (
-    <div className="w-full space-y-3">
-      {/* Thinking Accordion */}
-      {thinking && (
-        <details
-          className="border border-[#1b5e5e] rounded-lg overflow-hidden bg-[#0a0a0a] group cursor-pointer"
-          open={isOpen}
-          onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
-        >
-          <summary className="cursor-pointer px-4 py-3 bg-[#1b5e5e]/20 hover:bg-[#1b5e5e]/30 transition-colors text-sm font-semibold flex items-center gap-2 select-none list-none">
-            <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 flex-shrink-0" />
-            <span className="text-yellow-400">🧠</span>
-            <span>
-              {isStreaming ? "AI Thinking..." : "AI Reasoning"}
-              {isStreaming && <span className="ml-2 inline-flex gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" style={{ animationDelay: "0.2s" }}></span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" style={{ animationDelay: "0.4s" }}></span>
-              </span>}
-            </span>
-            <span className="text-xs text-gray-400 ml-auto">Transparency Mode</span>
-          </summary>
-          <div className="px-4 py-3 bg-[#000000]/50 border-t border-[#1b5e5e]/30">
-            <div className="text-xs text-gray-300 whitespace-pre-wrap font-mono leading-relaxed max-h-[300px] overflow-y-auto">
-              <span>{displayedThinking}</span>
-              {isStreaming && displayedThinking.length < thinking.length && (
-                <span className="animate-pulse text-gray-500">_</span>
-              )}
-            </div>
-          </div>
-        </details>
-      )}
+        // Extract pricing JSON blocks
+        const pricingBlocks: any[] = [];
+        const jsonMatches = workingContent.matchAll(
+            /\{[\s\S]*?"scope_name"[\s\S]*?\}/g,
+        );
 
-      {/* Main Content - SOW Narrative */}
-      {actualContent && (
-        <div className="pt-2 space-y-3">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              // Headings with proper spacing
-              h1: ({node, ...props}) => <h1 className="text-xl font-bold mt-4 mb-2 text-white" {...props} />,
-              h2: ({node, ...props}) => <h2 className="text-lg font-bold mt-3 mb-2 text-white" {...props} />,
-              h3: ({node, ...props}) => <h3 className="text-base font-bold mt-2 mb-1 text-white" {...props} />,
-              
-              // Paragraphs with proper spacing
-              p: ({node, ...props}) => <p className="text-sm text-white mb-2 leading-relaxed" {...props} />,
-              
-              // Lists
-              ul: ({node, ...props}) => <ul className="list-disc list-inside text-sm text-white mb-2 pl-2" {...props} />,
-              ol: ({node, ...props}) => <ol className="list-decimal list-inside text-sm text-white mb-2 pl-2" {...props} />,
-              li: ({node, ...props}) => <li className="text-sm text-white mb-1" {...props} />,
-              
-              // Tables with professional styling
-              table: ({node, ...props}) => (
-                <div className="overflow-x-auto my-3">
-                  <table className="w-full border-collapse border border-[#1b5e5e]" {...props} />
+        for (const match of jsonMatches) {
+            try {
+                const parsed = JSON.parse(match[0]);
+                if (parsed.scope_name && parsed.role_allocation) {
+                    pricingBlocks.push(parsed);
+                    // Remove this JSON from content
+                    workingContent = workingContent
+                        .replace(match[0], "")
+                        .trim();
+                }
+            } catch (e) {
+                console.warn("Could not parse JSON block:", e);
+            }
+        }
+
+        // Clean the remaining content
+        const cleanedContent = cleanSOWContent(workingContent);
+
+        return {
+            thinking: extractedThinking,
+            cleanContent: cleanedContent,
+            pricingBlocks,
+        };
+    }, [content, messageId]);
+
+    // Handle thinking extraction callback
+    const handleThinkingExtracted = useCallback(() => {
+        if (onThinkingExtracted && thinking) {
+            onThinkingExtracted(thinking);
+        }
+    }, [thinking, onThinkingExtracted]);
+
+    // Stream thinking display
+    useEffect(() => {
+        if (streamTimeoutRef.current) {
+            clearTimeout(streamTimeoutRef.current);
+            streamTimeoutRef.current = null;
+        }
+
+        if (thinking && isStreaming) {
+            setDisplayedThinking("");
+            let currentIndex = 0;
+
+            const streamThinking = () => {
+                if (currentIndex < thinking.length) {
+                    setDisplayedThinking(
+                        (prev) => prev + thinking[currentIndex],
+                    );
+                    currentIndex++;
+                    streamTimeoutRef.current = setTimeout(streamThinking, 15);
+                }
+            };
+
+            streamThinking();
+        } else if (thinking) {
+            setDisplayedThinking(thinking);
+        }
+
+        return () => {
+            if (streamTimeoutRef.current) {
+                clearTimeout(streamTimeoutRef.current);
+                streamTimeoutRef.current = null;
+            }
+        };
+    }, [thinking, isStreaming]);
+
+    // Call thinking callback
+    useEffect(() => {
+        handleThinkingExtracted();
+    }, [handleThinkingExtracted]);
+
+    // Show loading state when streaming but no content yet
+    if (
+        isStreaming &&
+        !cleanContent &&
+        pricingBlocks.length === 0 &&
+        !thinking
+    ) {
+        return (
+            <div className="w-full">
+                <div className="bg-[#0a0a0a] border border-[#1b5e5e] rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <div className="w-4 h-4 border-2 border-[#20e28f] border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm text-[#20e28f]">
+                            Generating SOW...
+                        </span>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="h-3 bg-[#1b5e5e]/30 rounded animate-pulse"></div>
+                        <div className="h-3 bg-[#1b5e5e]/30 rounded animate-pulse w-3/4"></div>
+                        <div className="h-3 bg-[#1b5e5e]/30 rounded animate-pulse w-1/2"></div>
+                    </div>
                 </div>
-              ),
-              thead: ({node, ...props}) => <thead className="bg-[#0e2e33]" {...props} />,
-              th: ({node, ...props}) => (
-                <th className="border border-[#1b5e5e] px-3 py-2 text-left font-bold text-white text-xs" {...props} />
-              ),
-              td: ({node, ...props}) => (
-                <td className="border border-[#1b5e5e] px-3 py-2 text-xs text-white" {...props} />
-              ),
-              tr: ({node, ...props}) => <tr className="hover:bg-[#1b5e5e]/20" {...props} />,
-              
-              // Code blocks
-              code: ({node, className, children, ...props}: any) => {
-                const isInline = !className?.includes('language-');
-                const isJsonBlock = className?.includes('language-json');
-                
-                return isInline ? (
-                  <code className="bg-[#0a0a0a] text-[#20e28f] px-2 py-1 rounded text-xs font-mono" {...props}>{children}</code>
-                ) : (
-                  <div className="relative group">
-                    <code className={`bg-[#0a0a0a] text-[#20e28f] block p-3 rounded text-xs font-mono ${
-                      isJsonBlock 
-                        ? 'overflow-x-auto pr-20 mb-2 border border-[#1b5e5e]' 
-                        : 'overflow-x-auto mb-2 border border-[#1b5e5e]'
-                    }`} {...props}>
-                      {children}
-                    </code>
-                    {isJsonBlock && (
-                      <Button
-                        onClick={() => {
-                          // Insert the full payload (narrative + JSON), not just the JSON block
-                          if (!buildInsertPayload || !buildInsertPayload.trim()) {
-                            console.warn("⚠️ [Accordion] Cannot insert: payload is empty");
-                            return;
-                          }
-                          console.log('📋 [Accordion] Inserting full payload from JSON code block button:', {
-                            payloadLength: buildInsertPayload.length,
-                            hasJson: /```json/i.test(buildInsertPayload),
-                            preview: buildInsertPayload.substring(0, 150),
-                          });
-                          onInsertClick?.(buildInsertPayload);
-                        }}
-                        className="absolute top-2 right-2 bg-[#20e28f] hover:bg-[#1db876] text-black text-xs font-semibold py-1.5 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        size="sm"
-                        title="Insert full SOW content (narrative + pricing table)"
-                      >
-                        📋 Insert All
-                      </Button>
-                    )}
-                  </div>
-                );
-              },
-              pre: ({node, ...props}) => <pre className="mb-2" {...props} />,
-              
-              // Blockquotes
-              blockquote: ({node, ...props}) => (
-                <blockquote className="border-l-4 border-[#20e28f] pl-3 italic text-gray-300 my-2 text-sm" {...props} />
-              ),
-              
-              // Strong and emphasis
-              strong: ({node, ...props}) => <strong className="font-bold text-white" {...props} />,
-              em: ({node, ...props}) => <em className="italic text-gray-200" {...props} />,
-              
-              // Horizontal rules
-              hr: ({node, ...props}) => <hr className="border-t border-[#1b5e5e] my-3" {...props} />,
-            }}
-            className="prose prose-invert max-w-none text-sm"
-          >
-            {actualContent}
-          </ReactMarkdown>
+            </div>
+        );
+    }
 
-          {/* JSON Accordion at the bottom if present */}
-          {jsonBlock && (
-            <details
-              className="border border-[#20e28f] rounded-lg overflow-hidden bg-[#0a0a0a] group mt-4 cursor-pointer"
-              open={false}
-              onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
-            >
-              <summary className="cursor-pointer px-4 py-3 bg-[#20e28f]/10 hover:bg-[#20e28f]/20 transition-colors text-sm font-semibold flex items-center gap-2 select-none list-none">
-                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 flex-shrink-0" />
-                <span className="text-[#20e28f]">📊</span>
-                <span>Structured JSON - Pricing Data</span>
-                <span className="text-xs text-gray-400 ml-auto">Click to expand</span>
-              </summary>
-              <div className="px-4 py-3 bg-[#000000]/50 border-t border-[#20e28f]/30 space-y-3">
-                <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto">
-                  {JSON.stringify(jsonBlock, null, 2)}
-                </pre>
-                <Button
-                  onClick={() => {
-                    // Insert the entire AI response payload (narrative + JSON), minus hidden thinking
-                    if (!buildInsertPayload || !buildInsertPayload.trim()) {
-                      console.warn("⚠️ [Accordion] Cannot insert: payload is empty");
-                      return;
+    // If no content at all, show nothing
+    if (!cleanContent && pricingBlocks.length === 0 && !thinking) {
+        return null;
+    }
+
+    return (
+        <div className="w-full space-y-4">
+            {/* Thinking Accordion - Only show if there's thinking content */}
+            {thinking && (
+                <details
+                    className="border border-[#20e28f]/30 rounded-lg overflow-hidden bg-[#0a0a0a] group"
+                    open={isThinkingOpen}
+                    onToggle={(e) =>
+                        setIsThinkingOpen((e.target as HTMLDetailsElement).open)
                     }
-                    console.log('✅ [Accordion] Inserting full payload from JSON accordion button:', {
-                      payloadLength: buildInsertPayload.length,
-                      hasJson: /```json/i.test(buildInsertPayload),
-                      preview: buildInsertPayload.substring(0, 150),
-                    });
-                    onInsertClick?.(buildInsertPayload);
-                  }}
-                  className="w-full bg-[#20e28f] hover:bg-[#1db876] text-black font-semibold py-2 px-3 rounded"
                 >
-                  ✅ Insert into Editor
-                </Button>
-              </div>
-            </details>
-          )}
+                    <summary className="cursor-pointer px-4 py-3 bg-[#20e28f]/5 hover:bg-[#20e28f]/10 transition-colors text-sm font-medium flex items-center gap-2 select-none list-none">
+                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 flex-shrink-0 text-[#20e28f]" />
+                        <Brain className="w-4 h-4 text-[#20e28f]" />
+                        <span className="text-[#20e28f]">
+                            AI Reasoning Process
+                        </span>
+                        {isStreaming && (
+                            <div className="ml-auto flex items-center gap-1">
+                                <div className="w-2 h-2 bg-[#20e28f] rounded-full animate-pulse"></div>
+                                <span className="text-xs text-gray-400">
+                                    Thinking...
+                                </span>
+                            </div>
+                        )}
+                    </summary>
+                    <div className="px-4 py-3 bg-[#000000]/30 border-t border-[#20e28f]/20">
+                        <div className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">
+                            {displayedThinking || thinking}
+                        </div>
+                    </div>
+                </details>
+            )}
+
+            {/* Main SOW Content */}
+            {cleanContent && (
+                <div className="bg-[#0a0a0a] border border-[#1b5e5e] rounded-lg overflow-hidden">
+                    <div className="bg-[#1b5e5e]/10 px-4 py-3 border-b border-[#1b5e5e]/30">
+                        <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-[#20e28f]" />
+                            <span className="text-sm font-medium text-[#20e28f]">
+                                Statement of Work
+                            </span>
+                            {isStreaming && (
+                                <div className="ml-auto flex items-center gap-1">
+                                    <div className="w-2 h-2 bg-[#20e28f] rounded-full animate-pulse"></div>
+                                    <span className="text-xs text-gray-400">
+                                        Generating...
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="p-4">
+                        <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                                h1: ({ node, ...props }) => (
+                                    <h1
+                                        className="text-lg font-bold mt-4 mb-3 text-white border-b border-[#1b5e5e]/30 pb-2"
+                                        {...props}
+                                    />
+                                ),
+                                h2: ({ node, ...props }) => (
+                                    <h2
+                                        className="text-base font-bold mt-3 mb-2 text-white"
+                                        {...props}
+                                    />
+                                ),
+                                h3: ({ node, ...props }) => (
+                                    <h3
+                                        className="text-sm font-bold mt-2 mb-1 text-white"
+                                        {...props}
+                                    />
+                                ),
+                                p: ({ node, ...props }) => (
+                                    <p
+                                        className="text-sm text-white mb-2 leading-relaxed"
+                                        {...props}
+                                    />
+                                ),
+                                ul: ({ node, ...props }) => (
+                                    <ul
+                                        className="list-disc list-inside text-sm text-white mb-2 pl-2"
+                                        {...props}
+                                    />
+                                ),
+                                ol: ({ node, ...props }) => (
+                                    <ol
+                                        className="list-decimal list-inside text-sm text-white mb-2 pl-2"
+                                        {...props}
+                                    />
+                                ),
+                                li: ({ node, ...props }) => (
+                                    <li
+                                        className="text-sm text-white mb-1"
+                                        {...props}
+                                    />
+                                ),
+                                strong: ({ node, ...props }) => (
+                                    <strong
+                                        className="font-bold text-white"
+                                        {...props}
+                                    />
+                                ),
+                                em: ({ node, ...props }) => (
+                                    <em
+                                        className="italic text-gray-200"
+                                        {...props}
+                                    />
+                                ),
+                                blockquote: ({ node, ...props }) => (
+                                    <blockquote
+                                        className="border-l-4 border-[#20e28f] pl-3 italic text-gray-300 my-2 text-sm"
+                                        {...props}
+                                    />
+                                ),
+                                code: ({
+                                    node,
+                                    className,
+                                    children,
+                                    ...props
+                                }: any) => {
+                                    const isInline =
+                                        !className?.includes("language-");
+                                    return isInline ? (
+                                        <code
+                                            className="bg-[#1b5e5e]/30 text-[#20e28f] px-2 py-1 rounded text-xs font-mono"
+                                            {...props}
+                                        >
+                                            {children}
+                                        </code>
+                                    ) : (
+                                        <pre className="bg-[#1b5e5e]/20 p-3 rounded text-xs font-mono overflow-x-auto mb-2 border border-[#1b5e5e]/30">
+                                            <code
+                                                className="text-[#20e28f]"
+                                                {...props}
+                                            >
+                                                {children}
+                                            </code>
+                                        </pre>
+                                    );
+                                },
+                            }}
+                            className="prose prose-invert max-w-none text-sm"
+                        >
+                            {cleanContent}
+                        </ReactMarkdown>
+                    </div>
+                </div>
+            )}
+
+            {/* Pricing Blocks */}
+            {pricingBlocks.length > 0 && (
+                <div className="space-y-3">
+                    {pricingBlocks.map((block, index) => (
+                        <div
+                            key={index}
+                            className="bg-[#0a0a0a] border border-[#20e28f]/30 rounded-lg overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="bg-[#20e28f]/10 px-4 py-3 border-b border-[#20e28f]/30">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4 text-[#20e28f]" />
+                                        <span className="text-sm font-medium text-[#20e28f]">
+                                            {block.scope_name}
+                                        </span>
+                                    </div>
+                                    <span className="text-sm font-bold text-[#20e28f]">
+                                        $
+                                        {(
+                                            block.scope_total || 0
+                                        ).toLocaleString("en-AU", {
+                                            minimumFractionDigits: 2,
+                                        })}
+                                    </span>
+                                </div>
+                                {block.scope_description && (
+                                    <p className="text-xs text-gray-300 mt-2 leading-relaxed">
+                                        {block.scope_description}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-4 space-y-4">
+                                {/* Deliverables */}
+                                {block.deliverables &&
+                                    block.deliverables.length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-medium text-white mb-2">
+                                                Key Deliverables
+                                            </h4>
+                                            <ul className="text-xs text-gray-300 space-y-1">
+                                                {block.deliverables.map(
+                                                    (
+                                                        deliverable: string,
+                                                        idx: number,
+                                                    ) => (
+                                                        <li
+                                                            key={idx}
+                                                            className="flex items-start gap-2"
+                                                        >
+                                                            <span className="text-[#20e28f] mt-1">
+                                                                •
+                                                            </span>
+                                                            <span>
+                                                                {deliverable}
+                                                            </span>
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                {/* Resource Allocation */}
+                                {block.role_allocation &&
+                                    block.role_allocation.length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-medium text-white mb-2">
+                                                Resource Allocation
+                                            </h4>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-xs">
+                                                    <thead>
+                                                        <tr className="border-b border-[#1b5e5e]/30">
+                                                            <th className="text-left py-2 text-gray-300 font-medium">
+                                                                Role
+                                                            </th>
+                                                            <th className="text-right py-2 text-gray-300 font-medium">
+                                                                Hours
+                                                            </th>
+                                                            <th className="text-right py-2 text-gray-300 font-medium">
+                                                                Rate
+                                                            </th>
+                                                            <th className="text-right py-2 text-gray-300 font-medium">
+                                                                Cost
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {block.role_allocation.map(
+                                                            (
+                                                                role: any,
+                                                                roleIndex: number,
+                                                            ) => (
+                                                                <tr
+                                                                    key={
+                                                                        roleIndex
+                                                                    }
+                                                                    className="border-b border-[#1b5e5e]/10"
+                                                                >
+                                                                    <td className="py-2 text-white text-left">
+                                                                        {
+                                                                            role.role
+                                                                        }
+                                                                    </td>
+                                                                    <td className="py-2 text-right text-gray-300">
+                                                                        {
+                                                                            role.hours
+                                                                        }
+                                                                    </td>
+                                                                    <td className="py-2 text-right text-gray-300">
+                                                                        $
+                                                                        {role.rate?.toFixed(
+                                                                            2,
+                                                                        )}
+                                                                    </td>
+                                                                    <td className="py-2 text-right text-white font-medium">
+                                                                        $
+                                                                        {role.cost?.toFixed(
+                                                                            2,
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ),
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                {/* Financial Summary */}
+                                <div className="bg-[#1b5e5e]/10 rounded p-3 space-y-2">
+                                    <h4 className="text-sm font-medium text-white mb-2">
+                                        Financial Summary
+                                    </h4>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-gray-300">
+                                                Subtotal:
+                                            </span>
+                                            <span className="text-white">
+                                                $
+                                                {(
+                                                    block.scope_subtotal || 0
+                                                ).toLocaleString("en-AU", {
+                                                    minimumFractionDigits: 2,
+                                                })}
+                                            </span>
+                                        </div>
+                                        {block.discount_percent > 0 && (
+                                            <>
+                                                <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-300">
+                                                        Discount (
+                                                        {block.discount_percent}
+                                                        %):
+                                                    </span>
+                                                    <span className="text-red-400">
+                                                        -$
+                                                        {(
+                                                            block.discount_amount ||
+                                                            0
+                                                        ).toLocaleString(
+                                                            "en-AU",
+                                                            {
+                                                                minimumFractionDigits: 2,
+                                                            },
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-300">
+                                                        After Discount:
+                                                    </span>
+                                                    <span className="text-white">
+                                                        $
+                                                        {(
+                                                            block.subtotal_after_discount ||
+                                                            0
+                                                        ).toLocaleString(
+                                                            "en-AU",
+                                                            {
+                                                                minimumFractionDigits: 2,
+                                                            },
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
+                                        {block.gst_percent && (
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-300">
+                                                    GST ({block.gst_percent}%):
+                                                </span>
+                                                <span className="text-white">
+                                                    $
+                                                    {(
+                                                        block.gst_amount || 0
+                                                    ).toLocaleString("en-AU", {
+                                                        minimumFractionDigits: 2,
+                                                    })}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-sm font-medium pt-2 border-t border-[#1b5e5e]/30">
+                                            <span className="text-[#20e28f]">
+                                                Total:
+                                            </span>
+                                            <span className="text-[#20e28f] font-bold">
+                                                $
+                                                {(
+                                                    block.scope_total || 0
+                                                ).toLocaleString("en-AU", {
+                                                    minimumFractionDigits: 2,
+                                                })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 }
 
 export default StreamingThoughtAccordion;
