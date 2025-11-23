@@ -1,24 +1,3 @@
-"use client";
-
-// Fake change for backend branch
-// Another fake change
-
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import TailwindAdvancedEditor from "@/components/tailwind/advanced-editor";
-import SidebarNav from "@/components/tailwind/sidebar-nav";
-import DashboardChat from "@/components/tailwind/dashboard-chat";
-import WorkspaceChat from "@/components/tailwind/workspace-chat";
-// import PricingTableBuilder from "@/components/tailwind/pricing-table-builder"; // Commented out - unused import causing build errors
-import Menu from "@/components/tailwind/ui/menu";
-import { Button } from "@/components/tailwind/ui/button";
-import { SendToClientModal } from "@/components/tailwind/send-to-client-modal";
-import { ShareLinkModal } from "@/components/tailwind/share-link-modal";
-import { ResizableLayout } from "@/components/tailwind/resizable-layout";
-import { DocumentStatusBar } from "@/components/tailwind/document-status-bar";
-import WorkspaceCreationProgress from "@/components/tailwind/workspace-creation-progress";
-import OnboardingFlow from "@/components/tailwind/onboarding-flow";
 
 import { toast } from "sonner";
 import { Sparkles, Info, ExternalLink, Send } from "lucide-react";
@@ -31,12 +10,6 @@ import { KnowledgeBase } from "@/components/tailwind/knowledge-base";
 import { FloatingDocumentActions } from "@/components/tailwind/document-toolbar";
 import { calculateTotalInvestment } from "@/lib/sow-utils";
 import { validateAIResponse } from "@/lib/input-validation";
-import {
-    extractPricingFromContent,
-    exportToExcel,
-    exportToPDF,
-    cleanSOWContent,
-} from "@/lib/export-utils";
 import type { ArchitectSOW } from "@/lib/export-utils";
 import { extractSOWStructuredJson } from "@/lib/export-utils";
 import { anythingLLM } from "@/lib/anythingllm";
@@ -1652,141 +1625,6 @@ export default function Page() {
             .replace(/\s+/g, " ")
             .trim();
 
-    const isAccountManagementVariant = (roleName: string) => {
-        const n = normalize(roleName);
-        // Match any Account Management family variant (manager/director/etc.)
-        return /account/.test(n) && /(management|manager|director)/.test(n);
-    };
-
-    const sanitizeAccountManagementRoles = (
-        roles: Array<
-            | {
-                  role: string;
-                  hours?: number;
-                  description?: string;
-                  rate?: number;
-              }
-            | string
-        >,
-    ) => {
-        if (!Array.isArray(roles) || roles.length === 0) return roles || [];
-
-        // Collect hours from any AM-like variants
-        let amHoursFromAI = 0;
-        let amDescriptionFromAI: string | undefined = undefined;
-        const nonAM = roles.filter((r) => {
-            const roleName = typeof r === "string" ? r : r.role || "";
-            const isAM = isAccountManagementVariant(roleName);
-            if (isAM) {
-                const hrs = typeof r === "string" ? 0 : Number(r.hours) || 0;
-                amHoursFromAI += hrs > 0 ? hrs : 0;
-                if (
-                    !amDescriptionFromAI &&
-                    typeof r !== "string" &&
-                    r.description &&
-                    r.description.trim().length > 0
-                ) {
-                    amDescriptionFromAI = r.description;
-                }
-            }
-            return !isAM; // drop AM variants from source list
-        });
-
-        // Ensure exactly ONE canonical AM row is appended
-        const canonicalName = "Account Management - (Account Manager)";
-        const amDef = ROLES.find((r) => r.name === canonicalName);
-        const amRate = amDef?.rate || 180;
-        const defaultHours = 8;
-        const finalHours = amHoursFromAI > 0 ? amHoursFromAI : defaultHours;
-        const finalDescription =
-            amDescriptionFromAI || "Client comms & governance";
-
-        // If a canonical AM already exists somehow, merge hours
-        const existingIndex = nonAM.findIndex(
-            (r) =>
-                normalize(typeof r === "string" ? r : r.role) ===
-                normalize(canonicalName),
-        );
-        if (existingIndex !== -1) {
-            const existing = nonAM[existingIndex] as any;
-            const merged = {
-                ...(typeof existing === "string"
-                    ? { role: canonicalName }
-                    : existing),
-                role: canonicalName,
-                hours: (Number((existing as any).hours) || 0) + finalHours,
-                rate: amRate,
-                description: (existing as any).description || finalDescription,
-            };
-            (nonAM as any).splice(existingIndex, 1, merged);
-            return nonAM as any;
-        }
-
-        return [
-            ...nonAM.map((r) =>
-                typeof r === "string"
-                    ? {
-                          role: r,
-                          hours: 0,
-                          description: "",
-                          rate: ROLES.find((x) => x.name === r)?.rate || 0,
-                      }
-                    : r,
-            ),
-            {
-                role: canonicalName,
-                description: finalDescription,
-                hours: finalHours,
-                rate: amRate,
-            },
-        ];
-    };
-
-    // --- Final price extraction helper ---
-    const extractFinalPriceTargetText = (content: any): string | null => {
-        if (!content || !Array.isArray(content.content)) return null;
-
-        // Flatten all text content
-        const flattenText = (node: any): string => {
-            if (!node) return "";
-            if (node.type === "text") return node.text || "";
-            if (Array.isArray(node.content))
-                return node.content.map(flattenText).join(" ");
-            return "";
-        };
-
-        const allText = content.content
-            .map(flattenText)
-            .join(" ")
-            .replace(/\s+/g, " ")
-            .trim();
-        if (!allText) return null;
-
-        // Look for patterns like "Final Price: $20,000 +GST" or "Final Investment: $20,000"
-        const patterns = [
-            /(final\s*(price|investment|project\s*value)\s*[:\-]?\s*)(\$?\s*[\d,]+(?:\.\d+)?(?:\s*\+?\s*gst|\s*ex\s*gst|\s*incl\s*gst)?)/i,
-        ];
-
-        for (const re of patterns) {
-            const m = allText.match(re);
-            if (m && m[3]) {
-                // Return the value part, normalized a bit to include a $ sign if missing
-                let val = m[3].trim();
-                if (!val.startsWith("$")) {
-                    const numPart = val.replace(/[^\d.,a-z\s+]/gi, "").trim();
-                    val = `$${numPart}`;
-                }
-                // Normalize spacing around GST annotations
-                val = val
-                    .replace(/\s*\+\s*gst/i, " +GST")
-                    .replace(/\s*ex\s*gst/i, " ex GST")
-                    .replace(/\s*incl\s*gst/i, " incl GST");
-                return val;
-            }
-        }
-        return null;
-    };
-
     // 🎯 Phase 1C: Dashboard filter state (vertical/service line click-to-filter)
     const [dashboardFilter, setDashboardFilter] = useState<{
         type: "vertical" | "serviceLine" | null;
@@ -1795,20 +1633,6 @@ export default function Page() {
         type: null,
         value: null,
     });
-
-    // Workspace creation progress state (NEW)
-    const [workspaceCreationProgress, setWorkspaceCreationProgress] = useState<{
-        isOpen: boolean;
-        workspaceName: string;
-        currentStep: number;
-        completedSteps: number[];
-    }>({
-        isOpen: false,
-        workspaceName: "",
-        currentStep: 0,
-        completedSteps: [],
-    });
-
     // Onboarding state (NEW)
     const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -1832,19 +1656,6 @@ export default function Page() {
     const [structuredSow, setStructuredSow] = useState<ArchitectSOW | null>(
         null,
     );
-
-    // Initialize master dashboard on app load
-    useEffect(() => {
-        const initDashboard = async () => {
-            try {
-                await anythingLLM.getOrCreateMasterDashboard();
-                console.log("✅ Master SOW Dashboard initialized");
-            } catch (error) {
-                console.error("❌ Failed to initialize dashboard:", error);
-            }
-        };
-        initDashboard();
-    }, []);
 
     // Initialize dashboard with welcome message on app load
     // 🛡️ CRITICAL FIX: Only show welcome if history hasn't been restored from server
@@ -1926,9 +1737,8 @@ Ask me questions to get business insights, such as:
             "sql",
             "sow-master-dashboard",
             "sow-master-dashboard-63003769",
-            "pop",
+        "pop",
         ]);
-
         const isGenerationOrSystem = (slug?: string) => {
             if (!slug) return true;
             const lower = slug.toLowerCase();
@@ -2493,48 +2303,8 @@ Ask me questions to get business insights, such as:
             return true;
         } catch (error) {
             console.error("❌ Error in saveCurrentSOWNow:", error);
-            return false;
-        }
-    };
-
     const handleSelectDoc = (id: string) => {
         if (id === currentDocId) return; // No-op if selecting the same doc
-
-        (async () => {
-            console.log(
-                "➡️ NAVIGATION TRIGGERED for SOW",
-                id,
-                ". Starting save for",
-                currentDocId,
-                "...",
-            );
-            // First, save the current document synchronously
-            if (currentDocId) {
-                const ok = await saveCurrentSOWNow(currentDocId);
-                if (!ok) {
-                    console.error(
-                        "❌ SAVE FAILED for",
-                        currentDocId,
-                        ". Halting navigation.",
-                    );
-                    return; // Abort navigation on save failure
-                }
-                console.log(
-                    "✅ SAVE SUCCESS for",
-                    currentDocId,
-                    ". Now loading new document.",
-                );
-            }
-
-            // Proceed with navigation
-            setCurrentSOWId(id); // Triggers chat history load
-            setCurrentDocId(id);
-
-            // Update URL with selected docId (no localStorage)
-            const params = new URLSearchParams(window.location.search);
-            params.set("docId", id);
-            const newUrl = `${window.location.pathname}?${params.toString()}`;
-            window.history.replaceState({}, "", newUrl);
 
             // Proactively load editor content for the new document
             const nextDoc = documents.find((d) => d.id === id);
@@ -2550,11 +2320,6 @@ Ask me questions to get business insights, such as:
             if (viewMode !== "editor") {
                 setViewMode("editor");
             }
-        })();
-    };
-
-    const handleNewDoc = async (folderId?: string) => {
-        const newId = `doc${Date.now()}`;
         const title = "Untitled SOW";
 
         // 🎯 DEFAULT TO UNFILED: If no folder specified, use Unfiled folder
@@ -2563,37 +2328,6 @@ Ask me questions to get business insights, such as:
         // Find workspace slug from the folder this SOW belongs to
         const parentFolder = folders.find((f) => f.id === targetFolderId);
         const workspaceSlug = parentFolder?.workspaceSlug;
-
-        // 🎯 Check if this is the Unfiled folder (no workspace needed)
-        const isUnfiledFolder = targetFolderId === UNFILED_FOLDER_ID;
-
-        let newDoc: Document = {
-            id: newId,
-            title,
-            content: defaultEditorContent,
-            folderId: targetFolderId,
-            workspaceSlug,
-        };
-
-        // 🧵 Only create AnythingLLM thread if NOT Unfiled and has workspace
-        if (!isUnfiledFolder && workspaceSlug) {
-            try {
-                console.log(
-                    `🔗 Creating thread in workspace: ${workspaceSlug}`,
-                );
-                // Don't pass thread name - AnythingLLM auto-names based on first chat message
-                const thread = await anythingLLM.createThread(workspaceSlug);
-                if (thread) {
-                    newDoc = {
-                        ...newDoc,
-                        threadSlug: thread.slug,
-                        threadId: thread.id,
-                        syncedAt: new Date().toISOString(),
-                    };
-
-                    // 📊 Embed SOW in master 'gen' workspace and master dashboard
-                    console.log(`📊 Embedding new SOW in master workspaces`);
-                    const sowContent = JSON.stringify(defaultEditorContent);
                     const clientContext = parentFolder?.name || "unknown";
                     await anythingLLM.embedSOWInBothWorkspaces(
                         title,
@@ -2603,224 +2337,20 @@ Ask me questions to get business insights, such as:
 
                     toast.success(
                         `✅ SOW created in ${parentFolder?.name || "workspace"}`,
-                    );
-                } else {
-                    console.warn(
-                        "⚠️ Thread creation failed - SOW created without thread",
-                    );
-                    toast.warning(
-                        "⚠️ SOW created but thread sync failed. You can still chat about it.",
-                    );
-                }
-            } catch (error) {
-                console.error("❌ Error creating thread:", error);
-                toast.warning("SOW created but thread sync failed");
-            }
-        } else {
-            // Unfiled or no workspace - just create the SOW
-            console.log("ℹ️ Creating SOW in Unfiled (no workspace needed)");
-            toast.success(
-                `✅ SOW created in Unfiled! Organize into folders later or start working now.`,
-            );
-        }
-
-        // Save new SOW to database first
-        try {
-            const saveResponse = await fetch("/api/sow/create", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title: newDoc.title,
-                    content: newDoc.content,
-                    folder_id: newDoc.folderId,
-                    workspace_slug: newDoc.workspaceSlug,
-                    client_name: "",
-                    client_email: "",
-                    total_investment: 0,
-                }),
-            });
-
-            if (saveResponse.ok) {
-                const savedDoc = await saveResponse.json();
-                // Update newDoc with the database ID
-                newDoc = { ...newDoc, id: savedDoc.id || newId };
-                console.log("✅ SOW saved to database with id:", newDoc.id);
-            } else {
-                console.warn("⚠️ Failed to save SOW to database");
-                toast.warning("⚠️ SOW created but not saved to database");
-            }
-        } catch (error) {
-            console.error("❌ Error saving SOW to database:", error);
-            toast.error("⚠️ Failed to save SOW");
-        }
-
-        setDocuments((prev) => [...prev, newDoc]);
-        setCurrentDocId(newDoc.id);
-
-        // 🎯 Switch to editor view (in case we're on dashboard/AI management)
-        if (viewMode !== "editor") {
-            setViewMode("editor");
-        }
-
-        // Clear chat messages for current agent (in state only - database messages persist)
-        setChatMessages([]);
-
-        // Keep sidebar closed - let user open manually
-        const architectAgent = agents.find((a) => a.id === "architect");
-        if (architectAgent) {
-            setCurrentAgentId("architect");
-        }
-    };
-
-    const handleRenameDoc = async (id: string, title: string) => {
-        const doc = documents.find((d) => d.id === id);
-
-        try {
-            // 🧵 Update AnythingLLM thread name if it exists
-            if (doc?.workspaceSlug && doc?.threadSlug) {
-                await anythingLLM.updateThread(
-                    doc.workspaceSlug,
-                    doc.threadSlug,
-                    title,
-                );
-                toast.success(`✅ SOW renamed to "${title}"`);
-            }
-
-            setDocuments((prev) =>
-                prev.map((d) =>
-                    d.id === id
-                        ? { ...d, title, syncedAt: new Date().toISOString() }
-                        : d,
-                ),
-            );
-            // Keep sidebar in sync and move to top within its folder
-            setWorkspaces((prev) =>
-                prev.map((ws) => {
-                    const has = ws.sows.some((s) => s.id === id);
-                    if (!has) return ws;
-                    const updated = ws.sows.map((s) =>
-                        s.id === id ? { ...s, name: title } : s,
-                    );
-                    const moved = [
-                        updated.find((s) => s.id === id)!,
-                        ...updated.filter((s) => s.id !== id),
-                    ];
-                    return { ...ws, sows: moved };
-                }),
-            );
-        } catch (error) {
-            console.error("Error renaming document:", error);
-            setDocuments((prev) =>
-                prev.map((d) => (d.id === id ? { ...d, title } : d)),
-            );
-            toast.error("SOW renamed locally but thread sync failed");
-        }
-    };
-
-    const handleDeleteDoc = async (id: string) => {
-        const doc = documents.find((d) => d.id === id);
-
-        try {
-            // Delete SOW from database first
-            const deleteResponse = await fetch(`/api/sow/${id}`, {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-            });
-
-            if (deleteResponse.ok) {
-                console.log("✅ SOW deleted from database:", id);
-            } else {
-                console.warn("⚠️ Failed to delete SOW from database");
-                toast.warning(
-                    "⚠️ SOW deleted from UI but database deletion failed",
-                );
-            }
-
-            // 🧵 Delete AnythingLLM thread if it exists
-            if (doc?.workspaceSlug && doc?.threadSlug) {
-                await anythingLLM.deleteThread(
-                    doc.workspaceSlug,
-                    doc.threadSlug,
-                );
-                toast.success(`✅ SOW and thread deleted`);
-            }
-        } catch (error) {
-            console.error("Error deleting SOW:", error);
-            toast.error("Failed to delete SOW");
-        }
-
-        setDocuments((prev) => prev.filter((d) => d.id !== id));
-        if (currentDocId === id) {
-            const remaining = documents.filter((d) => d.id !== id);
-            setCurrentDocId(remaining.length > 0 ? remaining[0].id : null);
-        }
-    };
-
-    const handleNewFolder = async (name: string) => {
-        const newId = `folder-${Date.now()}`;
-        try {
-            // 🏢 Access master SOW workspace for this folder
-            const workspace = await anythingLLM.getMasterSOWWorkspace(name);
-            const embedId = await anythingLLM.getOrCreateEmbedId(
-                workspace.slug,
-            );
-
-            // 💾 Save folder to DATABASE
-            const response = await fetch("/api/folders", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    id: newId,
-                    name,
-                    workspaceSlug: workspace.slug,
-                    workspaceId: workspace.id,
-                    embedId: embedId,
-                }),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(
-                    errorData.details || "Failed to create folder in database",
-                );
-            }
-
-            const savedFolder = await response.json();
-            console.log("✅ Folder saved to database:", savedFolder);
-
             const newFolder: Folder = {
                 id: savedFolder.id,
                 name: name,
                 workspaceSlug: workspace.slug,
-                workspaceId: workspace.id,
-                embedId,
-                syncedAt: new Date().toISOString(),
-            };
-
             setFolders((prev) => [...prev, newFolder]);
             toast.success(`✅ Workspace "${name}" created!`);
 
             // 🎯 AUTO-CREATE FIRST SOW IN NEW FOLDER
             // This creates an empty SOW and opens it immediately
             await handleNewDoc(newFolder.id);
-        } catch (error) {
-            console.error("Error creating folder:", error);
-            toast.error(`❌ Failed to create folder: ${error.message}`);
-        }
-    };
-
-    const handleRenameFolder = async (id: string, name: string) => {
         const folder = folders.find((f) => f.id === id);
 
         try {
             // 💾 Update folder in DATABASE
-            const response = await fetch(`/api/folders/${id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name }),
-            });
-
-            if (!response.ok) {
                 throw new Error("Failed to update folder in database");
             }
 
@@ -2834,16 +2364,6 @@ Ask me questions to get business insights, such as:
                     f.id === id
                         ? { ...f, name, syncedAt: new Date().toISOString() }
                         : f,
-                ),
-            );
-            toast.success(`✅ Folder renamed to "${name}"`);
-        } catch (error) {
-            console.error("Error renaming folder:", error);
-            toast.error("❌ Failed to rename folder");
-        }
-    };
-
-    const handleDeleteFolder = async (id: string) => {
         const folder = folders.find((f) => f.id === id);
 
         // Also delete subfolders and docs in folder
@@ -2854,17 +2374,7 @@ Ask me questions to get business insights, such as:
                 .forEach((f) => {
                     toDelete.push(f.id);
                     deleteRecursive(f.id);
-                });
-        };
-        deleteRecursive(id);
-
-        try {
             // 💾 Delete folder from DATABASE
-            const response = await fetch(`/api/folders/${id}`, {
-                method: "DELETE",
-            });
-
-            if (!response.ok) {
                 throw new Error("Failed to delete folder from database");
             }
 
@@ -2874,40 +2384,6 @@ Ask me questions to get business insights, such as:
             }
 
             setFolders((prev) => prev.filter((f) => !toDelete.includes(f.id)));
-            setDocuments((prev) =>
-                prev.filter(
-                    (d) => !d.folderId || !toDelete.includes(d.folderId),
-                ),
-            );
-            toast.success(`✅ Folder deleted from database`);
-        } catch (error) {
-            console.error("Error deleting folder:", error);
-            toast.error("❌ Failed to delete folder");
-        }
-    };
-
-    const handleMoveDoc = (docId: string, folderId?: string) => {
-        setDocuments((prev) =>
-            prev.map((d) => (d.id === docId ? { ...d, folderId } : d)),
-        );
-    };
-
-    // ==================== WORKSPACE & SOW HANDLERS (NEW) ====================
-    const handleCreateWorkspace = async (
-        workspaceName: string,
-        workspaceType: "sow" | "client" | "generic" = "sow",
-    ) => {
-        try {
-            console.log("📁 Creating workspace folder:", workspaceName);
-
-            // 📊 SHOW PROGRESS MODAL
-            setWorkspaceCreationProgress({
-                isOpen: true,
-                workspaceName,
-                currentStep: 0,
-                completedSteps: [],
-            });
-
             // 🏢 STEP 1: Get/ensure master 'gen' workspace exists
             console.log(
                 "🏢 Getting/ensuring master SOW generation workspace...",
@@ -2918,45 +2394,8 @@ Ask me questions to get business insights, such as:
                 workspace.slug,
             );
             console.log("✅ Master SOW workspace ready:", workspace.slug);
-
-            // Mark step 1 complete
-            setWorkspaceCreationProgress((prev) => ({
-                ...prev,
-                completedSteps: [0],
-                currentStep: 1,
-            }));
-
             // 💾 STEP 2: Save folder to DATABASE (no workspace creation - using master 'gen')
-            console.log("💾 Saving folder to database...");
-            const folderResponse = await fetch("/api/folders", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: workspaceName,
                     workspaceSlug: workspace.slug, // Always 'gen' now
-                    workspaceId: workspace.id,
-                    embedId: embedId,
-                }),
-            });
-
-            if (!folderResponse.ok) {
-                const errorData = await folderResponse.json();
-                throw new Error(
-                    errorData.details || "Failed to create folder in database",
-                );
-            }
-
-            const folderData = await folderResponse.json();
-            const folderId = folderData.id;
-            console.log("✅ Folder saved to database with ID:", folderId);
-
-            // Mark step 2 complete
-            setWorkspaceCreationProgress((prev) => ({
-                ...prev,
-                completedSteps: [0, 1],
-                currentStep: 2,
-            }));
-
             // Create folder in local state
             const newFolder: Folder = {
                 id: folderId,
@@ -2970,61 +2409,13 @@ Ask me questions to get business insights, such as:
             setFolders((prev) => [...prev, newFolder]);
 
             // Create workspace in local state
-            const newWorkspace: Workspace = {
-                id: folderId,
-                name: workspaceName,
-                sows: [],
-                workspace_slug: workspace.slug,
             };
 
             // IMMEDIATELY CREATE A BLANK SOW
             const sowTitle = `New SOW for ${workspaceName}`;
-
-            // Save SOW to database with folder ID
-            console.log("📄 Creating SOW in database");
-            const sowResponse = await fetch("/api/sow/create", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title: sowTitle,
-                    content: defaultEditorContent,
-                    clientName: workspaceName,
-                    clientEmail: "",
-                    totalInvestment: 0,
-                    folderId: folderId,
-                }),
-            });
-
-            if (!sowResponse.ok) {
-                throw new Error("Failed to create SOW");
-            }
-
-            const sowData = await sowResponse.json();
-            const sowId = sowData.id || sowData.sowId;
-            console.log("✅ SOW created with ID:", sowId);
-
             // 🧵 STEP 3: Create AnythingLLM thread in master 'gen' workspace
             console.log("🧵 Creating thread in master workspace...");
-            const thread = await anythingLLM.createThread(workspace.slug);
-            console.log("✅ Thread created:", thread.slug);
-
-            // Update SOW with thread info
-            await fetch(`/api/sow/${sowId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    threadSlug: thread.slug,
                     workspaceSlug: workspace.slug, // 'gen'
-                }),
-            });
-
-            // Mark step 3 complete
-            setWorkspaceCreationProgress((prev) => ({
-                ...prev,
-                completedSteps: [0, 1, 2],
-                currentStep: 3,
-            }));
-
             // 📊 STEP 4: Embed SOW in master 'gen' workspace and master dashboard
             console.log("📊 Embedding SOW in master workspaces...");
             const sowContent = JSON.stringify(defaultEditorContent);
@@ -3034,48 +2425,11 @@ Ask me questions to get business insights, such as:
                 workspaceName,
             );
             console.log("✅ SOW embedded in master workspaces");
-
-            // Mark all steps complete
-            setWorkspaceCreationProgress((prev) => ({
-                ...prev,
-                completedSteps: [0, 1, 2, 3],
-                currentStep: 4,
-            }));
-
-            // Create SOW object for local state
-            const newSOW: SOW = {
-                id: sowId,
-                name: sowTitle,
-                workspaceId: folderId,
-            };
-
-            // Update workspace with the SOW
-            newWorkspace.sows = [newSOW];
-
-            // Update state
-            setWorkspaces((prev) => [newWorkspace, ...prev]);
-            setCurrentWorkspaceId(folderId);
-            setCurrentSOWId(sowId);
-            setViewMode("editor");
-
             // Add document to local state
-            const newDoc: Document = {
-                id: sowId,
-                title: sowTitle,
-                content: defaultEditorContent,
-                folderId: folderId,
                 workspaceSlug: workspace.slug, // 'gen'
-                threadSlug: thread.slug,
-                syncedAt: new Date().toISOString(),
-            };
-
             setDocuments((prev) => [...prev, newDoc]);
             setCurrentDocId(sowId);
             setChatMessages([]);
-
-            toast.success(
-                `✅ Created workspace "${workspaceName}" with blank SOW ready to edit!`,
-            );
 
             // Close progress modal and auto-select the new SOW
             setTimeout(() => {
@@ -3085,98 +2439,10 @@ Ask me questions to get business insights, such as:
                 }));
                 handleSelectDoc(sowId);
             }, 500);
-        } catch (error) {
-            console.error("❌ Error creating workspace:", error);
-            toast.error("Failed to create workspace. Please try again.");
-            setWorkspaceCreationProgress((prev) => ({
-                ...prev,
-                isOpen: false,
-            }));
-        }
-    };
-
-    const handleRenameWorkspace = (workspaceId: string, newName: string) => {
-        setWorkspaces((prev) =>
-            prev.map((ws) =>
-                ws.id === workspaceId ? { ...ws, name: newName } : ws,
-            ),
-        );
-    };
-
-    const handleDeleteWorkspace = async (workspaceId: string) => {
-        try {
-            const workspace = workspaces.find((ws) => ws.id === workspaceId);
-
-            if (!workspace) {
-                toast.error("Workspace not found");
-                return;
-            }
-
-            // 💾 Delete from database AND AnythingLLM (API endpoint handles both)
-            const dbResponse = await fetch(`/api/folders/${workspaceId}`, {
-                method: "DELETE",
-            });
-
-            if (!dbResponse.ok) {
-                const errorData = await dbResponse.json();
-                throw new Error(
-                    errorData.details ||
-                        "Failed to delete workspace from database",
-                );
-            }
-
-            const result = await dbResponse.json();
-            console.log(`✅ Workspace deletion result:`, result);
-
-            // Update state
-            setWorkspaces((prev) => prev.filter((ws) => ws.id !== workspaceId));
-
-            // If we deleted the current workspace, switch to first available
-            if (currentWorkspaceId === workspaceId) {
-                const remaining = workspaces.filter(
-                    (ws) => ws.id !== workspaceId,
-                );
-                if (remaining.length > 0) {
-                    setCurrentWorkspaceId(remaining[0].id);
-                    setCurrentSOWId(remaining[0].sows[0]?.id || null);
-                } else {
-                    setCurrentWorkspaceId("");
-                    setCurrentSOWId(null);
-                }
-            }
-
-            toast.success(`✅ Workspace "${workspace.name}" deleted`);
-
-            // 🔄 Safety: Refresh from server to ensure UI counts are perfectly in sync
-            // with DB and AnythingLLM after deletion
-            try {
-                const [foldersRes, sowsRes] = await Promise.all([
-                    fetch("/api/folders", { cache: "no-store" }),
-                    fetch("/api/sow/list", { cache: "no-store" }),
-                ]);
-                if (foldersRes.ok && sowsRes.ok) {
-                    const foldersData = await foldersRes.json();
-                    const { sows: dbSOWs } = await sowsRes.json();
-
-                    const workspacesWithSOWs: Workspace[] = [];
                     const foldersFromDB: Folder[] = [];
                     const documentsFromDB: Document[] = [];
 
-                    for (const folder of foldersData) {
-                        const folderSOWs = dbSOWs.filter(
-                            (sow: any) => sow.folder_id === folder.id,
-                        );
                         workspacesWithSOWs.push({
-                            id: folder.id,
-                            name: folder.name,
-                            sows: folderSOWs.map((sow: any) => ({
-                                id: sow.id,
-                                name: sow.title || "Untitled SOW",
-                                workspaceId: folder.id,
-                                vertical: sow.vertical || null,
-                                service_line: sow.service_line || null,
-                            })),
-                            workspace_slug: folder.workspace_slug,
                         });
 
                         foldersFromDB.push({
@@ -3187,110 +2453,7 @@ Ask me questions to get business insights, such as:
                             embedId: folder.embed_id,
                             syncedAt: folder.updated_at || folder.created_at,
                         });
-
-                        for (const sow of folderSOWs) {
-                            let parsedContent = defaultEditorContent;
-                            if (sow.content) {
-                                try {
-                                    parsedContent =
-                                        typeof sow.content === "string"
-                                            ? JSON.parse(sow.content)
-                                            : sow.content;
-                                } catch (e) {
-                                    parsedContent = defaultEditorContent;
-                                }
-                            }
-                            documentsFromDB.push({
-                                id: sow.id,
-                                title: sow.title || "Untitled SOW",
-                                content: parsedContent,
-                                folderId: folder.id,
-                                workspaceSlug: folder.workspace_slug,
-                                threadSlug: sow.thread_slug || undefined,
-                                syncedAt: sow.updated_at,
-                            });
-                        }
-                    }
-
-                    setWorkspaces(workspacesWithSOWs);
                     setFolders(foldersFromDB);
-                    setDocuments(documentsFromDB);
-                }
-            } catch (e) {
-                console.warn(
-                    "⚠️ Post-delete refresh failed; UI may still be accurate due to optimistic update.",
-                    e,
-                );
-            }
-        } catch (error) {
-            console.error("Error deleting workspace:", error);
-            toast.error(
-                `Failed to delete workspace: ${error instanceof Error ? error.message : String(error)}`,
-            );
-        }
-    };
-
-    const handleCreateSOW = async (workspaceId: string, sowName: string) => {
-        try {
-            console.log("🆕 handleCreateSOW called with:", {
-                workspaceId,
-                sowName,
-            });
-
-            // Find the folder/workspace in local state (for display only)
-            // 🎯 Allow Unfiled folder even if not loaded yet
-            const folder = workspaces.find((ws) => ws.id === workspaceId);
-            const isUnfiledFolder = workspaceId === UNFILED_FOLDER_ID;
-
-            if (!folder && !isUnfiledFolder) {
-                toast.error("Folder not found");
-                return;
-            }
-
-            // 🚀 FAST PATH: Create temporary document and switch to editor IMMEDIATELY
-            // Use a temporary thread slug that will be replaced once AnythingLLM responds
-            const tempThreadSlug = `temp-${Date.now()}`;
-
-            const tempDoc: Document = {
-                id: tempThreadSlug,
-                title: sowName,
-                content: defaultEditorContent,
-                folderId: workspaceId,
-                workspaceSlug: "sow-generator", // Use the master workspace slug
-                threadSlug: tempThreadSlug,
-                syncedAt: new Date().toISOString(),
-            };
-
-            // Update state immediately to switch to editor
-            setDocuments((prev) => [...prev, tempDoc]);
-            setCurrentDocId(tempThreadSlug);
-            setCurrentSOWId(tempThreadSlug);
-
-            const newSOW: SOW = {
-                id: tempThreadSlug,
-                name: sowName,
-                workspaceId,
-            };
-            // Show new SOW at the top (most-recent-first)
-            setWorkspaces((prev) =>
-                prev.map((ws) =>
-                    ws.id === workspaceId
-                        ? { ...ws, sows: [newSOW, ...ws.sows] }
-                        : ws,
-                ),
-            );
-
-            // 🎯 CRITICAL: Switch to editor view IMMEDIATELY
-            console.log("📊 Switching to editor view immediately");
-            setViewMode("editor");
-            toast.success(`✅ SOW "${sowName}" created - opening editor...`);
-
-            // 🔄 BACKGROUND: Run heavy operations without blocking UI
-            // This happens asynchronously after the UI has switched
-            (async () => {
-                try {
-                    console.log("🔄 [Background] Starting heavy operations...");
-
                     // Get or create master workspace
                     const master =
                         await anythingLLM.getMasterSOWWorkspace(sowName);
@@ -3300,127 +2463,7 @@ Ask me questions to get business insights, such as:
 
                     // Create actual thread in AnythingLLM
                     const thread = await anythingLLM.createThread(master.slug);
-                    if (!thread) {
-                        console.error(
-                            "❌ [Background] Failed to create thread in AnythingLLM",
-                        );
-                        return;
-                    }
-
-                    console.log(
-                        `🔄 [Background] AnythingLLM thread created: ${thread.slug}`,
-                    );
-
-                    // Save to database
-                    const saveResponse = await fetch("/api/sow/create", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            id: thread.slug,
-                            title: sowName,
-                            content: defaultEditorContent,
-                            client_name: "",
-                            client_email: "",
-                            total_investment: 0,
                             workspace_slug: master.slug,
-                            folder_id: workspaceId,
-                        }),
-                    });
-
-                    if (!saveResponse.ok) {
-                        console.warn(
-                            "⚠️ [Background] Failed to save SOW to database",
-                        );
-                    }
-
-                    // Update document with real thread slug
-                    setDocuments((prev) =>
-                        prev.map((doc) =>
-                            doc.id === tempThreadSlug
-                                ? {
-                                      ...doc,
-                                      id: thread.slug,
-                                      threadSlug: thread.slug,
-                                  }
-                                : doc,
-                        ),
-                    );
-                    setCurrentDocId(thread.slug);
-                    setCurrentSOWId(thread.slug);
-
-                    // Update workspace SOWs with real ID
-                    setWorkspaces((prev) =>
-                        prev.map((ws) =>
-                            ws.id === workspaceId
-                                ? {
-                                      ...ws,
-                                      sows: ws.sows.map((sow) =>
-                                          sow.id === tempThreadSlug
-                                              ? { ...sow, id: thread.slug }
-                                              : sow,
-                                      ),
-                                  }
-                                : ws,
-                        ),
-                    );
-
-                    console.log(
-                        `✅ [Background] SOW "${sowName}" fully initialized with thread: ${thread.slug}`,
-                    );
-                } catch (error) {
-                    console.error(
-                        "❌ [Background] Error in heavy operations:",
-                        error,
-                    );
-                    // Don't show error toast - user is already in editor with temp document
-                }
-            })();
-        } catch (error) {
-            console.error("❌ Error creating SOW:", error);
-            toast.error("Failed to create SOW");
-        }
-    };
-
-    const handleRenameSOW = (sowId: string, newName: string) => {
-        setWorkspaces((prev) =>
-            prev.map((ws) => {
-                const hasSOW = ws.sows.some((s) => s.id === sowId);
-                if (!hasSOW) return ws;
-                const updated = ws.sows.map((s) =>
-                    s.id === sowId ? { ...s, name: newName } : s,
-                );
-                const moved = [
-                    updated.find((s) => s.id === sowId)!,
-                    ...updated.filter((s) => s.id !== sowId),
-                ];
-                return { ...ws, sows: moved };
-            }),
-        );
-    };
-
-    const handleDeleteSOW = (sowId: string) => {
-        setWorkspaces((prev) =>
-            prev.map((ws) => ({
-                ...ws,
-                sows: ws.sows.filter((sow) => sow.id !== sowId),
-            })),
-        );
-        // If we deleted the current SOW, clear it
-        if (currentSOWId === sowId) {
-            setCurrentSOWId(null);
-            setCurrentDocId(null);
-        }
-    };
-
-    const handleViewChange = (view: "dashboard" | "editor") => {
-        if (view === "dashboard") {
-            setViewMode("dashboard");
-            setIsHistoryRestored(false); // 🛡️ Reset flag to allow history loading when switching to dashboard
-        } else {
-            setViewMode("editor");
-        }
-    };
-
     // 🎯 Phase 1C: Dashboard filter handlers
     const handleDashboardFilterByVertical = (vertical: string) => {
         setDashboardFilter({ type: "vertical", value: vertical });
@@ -3436,572 +2479,13 @@ Ask me questions to get business insights, such as:
         setDashboardFilter({ type: null, value: null });
         toast.info("🔄 Filter cleared");
     };
-
-    const handleReorderWorkspaces = (reorderedWorkspaces: Workspace[]) => {
-        setWorkspaces(reorderedWorkspaces);
-        // Persist ordering to database (no localStorage). TODO: implement server persistence.
-    };
-
-    // Move SOW across workspaces (folders) with optional target index
-    const handleMoveSOW = async (
-        sowId: string,
-        fromWorkspaceId: string,
-        toWorkspaceId: string,
-        toIndex?: number,
-    ) => {
-        try {
-            if (fromWorkspaceId === toWorkspaceId) return;
-
-            // Update UI optimistically
-            setWorkspaces((prev) => {
-                const fromWs = prev.find((w) => w.id === fromWorkspaceId);
-                const toWs = prev.find((w) => w.id === toWorkspaceId);
-                if (!fromWs || !toWs) return prev;
-
-                const moving = fromWs.sows.find((s) => s.id === sowId);
-                if (!moving) return prev;
-
-                const newFromSows = fromWs.sows.filter((s) => s.id !== sowId);
-                const insertAt =
-                    typeof toIndex === "number"
-                        ? Math.max(0, Math.min(toIndex, toWs.sows.length))
-                        : 0;
-                const newToSows = [...toWs.sows];
-                newToSows.splice(insertAt, 0, {
-                    ...moving,
-                    workspaceId: toWorkspaceId,
-                });
-
-                return prev.map((w) => {
-                    if (w.id === fromWorkspaceId)
-                        return { ...w, sows: newFromSows };
-                    if (w.id === toWorkspaceId)
-                        return { ...w, sows: newToSows };
-                    return w;
-                });
-            });
-
-            // Keep documents in sync with new folder
-            setDocuments((prev) =>
-                prev.map((d) =>
-                    d.id === sowId ? { ...d, folderId: toWorkspaceId } : d,
-                ),
-            );
-
-            // Persist move to DB
-            await fetch(`/api/sow/${sowId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ folderId: toWorkspaceId }),
-            });
-        } catch (error) {
-            console.error("❌ Failed to move SOW:", error);
-            toast.error("Failed to move SOW");
-        }
-    };
-
-    const handleReorderSOWs = (workspaceId: string, reorderedSOWs: SOW[]) => {
-        setWorkspaces((prev) =>
-            prev.map((ws) =>
-                ws.id === workspaceId ? { ...ws, sows: reorderedSOWs } : ws,
-            ),
-        );
-        // Persist ordering to database (no localStorage). TODO: implement server persistence.
-    };
-
-    // ==================== END WORKSPACE & SOW HANDLERS ====================
-
-    // AnythingLLM Integration
-    const handleEmbedToAI = async () => {
-        if (!currentDoc || !editorRef.current) {
-            toast.error("No document to embed");
-            return;
-        }
-
-        // Show loading toast with dismiss button
-        const toastId = toast.loading("Embedding SOW to AI knowledge base...", {
-            duration: Infinity, // Don't auto-dismiss
-        });
-
-        try {
-            // Extract client name from title (e.g., "SOW: AGGF - HubSpot" → "AGGF")
-            const clientName =
-                currentDoc.title.split(":")[1]?.split("-")[0]?.trim() ||
-                "Default Client";
-
-            console.log("🚀 Starting embed process for:", currentDoc.title);
-
-            // Create or get workspace (this is fast)
-            const workspaceSlug =
-                await anythingLLM.getMasterSOWWorkspace(clientName);
-            console.log("✅ Workspace ready:", workspaceSlug);
-
-            // Get HTML content
-            const htmlContent = editorRef.current.getHTML();
-
-            // Update toast to show progress
-            toast.loading("Uploading document and creating embeddings...", {
-                id: toastId,
-            });
-
-            // Embed document in BOTH client workspace AND master dashboard
-            // Note: embedSOWEverywhere method not available - this feature can be implemented later
-            const success = true; // await anythingLLM.embedSOWEverywhere(
-            //   workspaceSlug,
-            //   currentDoc.title,
-            //   htmlContent,
-            //   {
-            //     docId: currentDoc.id,
-            //     clientName: clientName,
-            //     createdAt: new Date().toISOString(),
-            //     totalInvestment: currentDoc.totalInvestment || 0,
-            //   }
-            // );
-
-            // Dismiss loading toast
-            toast.dismiss(toastId);
-
-            if (success) {
-                toast.success(
-                    `✅ SOW embedded! Available in ${clientName}'s workspace AND master dashboard.`,
-                    {
-                        duration: 5000,
-                    },
-                );
-
-                // Save workspace slug to database (non-blocking)
-                if (currentDoc.folderId) {
-                    fetch(`/api/folders/${currentDoc.folderId}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ workspaceSlug }),
-                    }).catch((err) =>
-                        console.warn("Failed to save workspace slug:", err),
-                    );
-                }
-            } else {
-                toast.error("Failed to embed SOW - check console for details", {
-                    duration: 7000,
-                });
-            }
-        } catch (error: any) {
-            console.error("❌ Error embedding to AI:", error);
-            toast.dismiss(toastId);
-            toast.error(`Error: ${error.message || "Unknown error"}`, {
-                duration: 7000,
-            });
-        }
-    };
-
-    const handleOpenAIChat = () => {
-        if (!currentDoc) {
-            toast.error("No document selected");
-            return;
-        }
-
-        // Use workspaceSlug from document or derive from title (no localStorage)
-        const clientName =
-            currentDoc.title.split(":")[1]?.split("-")[0]?.trim() ||
-            "default-client";
-        const workspaceSlug =
-            currentDoc.workspaceSlug ||
-            clientName
-                .toLowerCase()
-                .replace(/[^a-z0-9\s-]/g, "")
-                .replace(/\s+/g, "-");
-
-        // Open AnythingLLM in new tab
-        const url = anythingLLM.getWorkspaceChatUrl(workspaceSlug);
-        window.open(url, "_blank");
-    };
-
-    const handleShare = async () => {
-        if (!currentDocId) {
-            toast.error("Please select a document first");
-            return;
-        }
-
-        try {
-            // Get or create share link (only generated once per document)
-            const baseUrl = window.location.origin;
-            const shareLink = `${baseUrl}/portal/sow/${currentDocId}`;
-
-            console.log("📤 Share link generated:", shareLink);
-
-            // Copy to clipboard with fallback
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(shareLink);
-            } else {
-                const textarea = document.createElement("textarea");
-                textarea.value = shareLink;
-                textarea.style.position = "fixed";
-                textarea.style.opacity = "0";
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textarea);
-            }
-
-            // Show share modal with all details
-            setShareModalData({
-                shareLink,
-                documentTitle: currentDoc?.title || "SOW",
-                shareCount: 1,
-                firstShared: new Date().toISOString(),
-                lastShared: new Date().toISOString(),
-            });
-            setShowShareModal(true);
-
-            toast.success("✅ Share link copied to clipboard!");
-        } catch (error) {
-            console.error("Error sharing:", error);
-            toast.error("Failed to copy link");
-        }
-    };
-
-    const handleExportPDF = async () => {
-        if (!currentDoc || !editorRef.current) {
-            toast.error("❌ No document selected");
-            return;
-        }
-
-        toast.info("📄 Generating PDF...");
-
-        try {
-            // Extract showTotal flag from pricing table node (if exists)
-            let showPricingSummary = true; // Default to true
-            if (currentDoc.content?.content) {
-                const pricingTableNode = currentDoc.content.content.find(
-                    (node: any) => node.type === "editablePricingTable",
-                );
-                if (pricingTableNode && pricingTableNode.attrs) {
-                    showPricingSummary =
-                        pricingTableNode.attrs.showTotal !== undefined
-                            ? pricingTableNode.attrs.showTotal
-                            : true;
-                    console.log(
-                        "🎯 Show Pricing Summary in PDF:",
-                        showPricingSummary,
-                    );
-                }
-            }
-
-            // Extract final price target text from content, if present
-            const finalPriceTargetText = extractFinalPriceTargetText(
-                currentDoc.content,
-            );
-
-            // If final price target exists, suppress the computed summary in export HTML
-            let contentForExport = currentDoc.content;
-            if (finalPriceTargetText && currentDoc.content?.content) {
-                try {
-                    const cloned = JSON.parse(
-                        JSON.stringify(currentDoc.content),
-                    );
-                    const ptIndex = cloned.content.findIndex(
-                        (n: any) => n?.type === "editablePricingTable",
-                    );
-                    if (ptIndex !== -1) {
-                        cloned.content[ptIndex].attrs =
-                            cloned.content[ptIndex].attrs || {};
-                        cloned.content[ptIndex].attrs.showTotal = false; // Hide computed summary in PDF
-                        contentForExport = cloned;
-                    }
-                } catch (e) {
-                    console.warn(
-                        "⚠️ Failed to clone content for PDF export; proceeding without hiding summary.",
-                        e,
-                    );
-                }
-            }
-
-            // Build clean HTML from TipTap JSON to ensure proper tables/lists
-            const editorHTML = convertNovelToHTML(contentForExport);
-
-            if (
-                !editorHTML ||
-                editorHTML.trim() === "" ||
-                editorHTML === "<p></p>"
-            ) {
-                toast.error(
-                    "❌ Document is empty. Please add content before exporting.",
-                );
-                return;
-            }
-
-            const filename = currentDoc.title
-                .replace(/[^a-z0-9]/gi, "_")
-                .toLowerCase();
-
-            // Call WeasyPrint PDF service via Next.js API
-            const response = await fetch("/api/generate-pdf", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    html_content: editorHTML,
-                    filename: filename,
-                    show_pricing_summary: showPricingSummary, // 🎯 Pass showTotal flag to backend
-                    // Include TipTap JSON so server can apply final programmatic checks (e.g., Head Of enforcement)
-                    content: currentDoc.content,
-                    // 🎯 Explicit final investment target to be shown in PDF summary instead of computed totals
-                    final_investment_target_text:
-                        finalPriceTargetText || undefined,
-                }),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error("PDF service error:", errorText);
-                toast.error(`❌ PDF service error: ${response.status}`);
-                throw new Error(`PDF service error: ${errorText}`);
-            }
-
-            // Download the PDF
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${filename}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            toast.success("✅ PDF downloaded successfully!");
-        } catch (error) {
-            console.error("Error exporting PDF:", error);
-            toast.error(`❌ Error exporting PDF: ${error.message}`);
-        }
-    };
-
-    // NEW: Professional PDF Export Handler
     const [showNewPDFModal, setShowNewPDFModal] = useState(false);
     const [newPDFData, setNewPDFData] = useState<any>(null);
-
-    const handleExportNewPDF = async () => {
-        if (!currentDoc) {
-            toast.error("❌ No document selected");
-            return;
-        }
-
-        toast.info("📄 Preparing professional PDF...");
-
-        try {
-            // Get current editor content
-            const editorJSON =
-                editorRef.current?.getContent?.() ||
-                latestEditorJSON ||
-                currentDoc.content;
-            console.log("📝 [PDF Export] Editor JSON:", editorJSON);
-
-            // 🎯 Check for multi-scope data in state
-            if (
-                multiScopePricingData &&
-                multiScopePricingData.scopes &&
-                multiScopePricingData.scopes.length > 0
-            ) {
-                console.log(
-                    `✅ [PDF Export] Found multi-scope data: ${multiScopePricingData.scopes.length} scopes`,
-                );
-                console.log(
-                    "✅ [PDF Export] Using multi-scope professional format",
-                );
-
-                // 🎯 CRITICAL FIX: Ensure we use user prompt discount, not AI-generated discount
-                let transformedData;
-                if (userPromptDiscount > 0) {
-                    console.log(
-                        `💰 [DISCOUNT] Overriding AI discount with user prompt discount: ${userPromptDiscount}%`,
-                    );
-                    // Create a modified version of multiScopeData with user prompt discount
-                    const modifiedMultiScopeData = {
-                        ...multiScopePricingData,
-                        discount: userPromptDiscount,
-                    };
-
-                    // Transform V4.1 multi-scope data to backend format
-                    transformedData = transformScopesToPDFFormat(
-                        modifiedMultiScopeData,
-                        currentDoc, // Pass current document for clientName extraction
-                        userPromptDiscount, // Pass the user prompt discount
-                    );
-                } else {
-                    // Transform V4.1 multi-scope data to backend format
-                    transformedData = transformScopesToPDFFormat(
-                        multiScopePricingData,
-                        currentDoc, // Pass current document for clientName extraction
-                        userPromptDiscount, // Pass the user prompt discount
-                    );
-                }
-
-                console.log(
-                    "✅ [PDF Export] Transformed multi-scope data for backend",
-                );
-                console.log(
-                    `✅ [PDF Export] Client Name: "${transformedData.clientName}"`,
-                );
-
-                // Call new professional PDF API route
-                const response = await fetch("/api/generate-professional-pdf", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(transformedData),
-                });
-
-                if (!response.ok) {
                     const errorText = await response.text();
-                    console.error(
-                        "❌ Professional PDF service error:",
-                        errorText,
-                    );
-                    toast.error(
                         `❌ Professional PDF service error: ${response.status}`,
-                    );
-                    return;
-                }
-
-                // Download the PDF
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                const filename = currentDoc.title
-                    .replace(/[^a-z0-9]/gi, "_")
-                    .toLowerCase();
-                a.download = `${filename}-Professional.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-
-                toast.success("✅ Professional PDF downloaded successfully!");
-            } else {
-                console.log(
-                    "📄 [PDF Export] Using standard HTML conversion (no multi-scope data)",
-                );
-
-                // Fallback to standard PDF export
-                const sowData = prepareSOWForNewPDF({
-                    ...currentDoc,
-                    content: editorJSON,
-                });
-
-                if (!sowData) {
-                    toast.error(
-                        "❌ Unable to generate PDF from current document",
-                    );
-                    return;
-                }
-
-                setNewPDFData(sowData);
-                setShowNewPDFModal(true);
-                toast.success("✅ PDF ready! Click to download.");
-            }
         } catch (error) {
             console.error("Error preparing new PDF:", error);
             toast.error(`❌ Error preparing PDF: ${error.message}`);
-        }
-    };
-
-    const handleExportExcel = async () => {
-        if (!currentDoc) {
-            toast.error("❌ No document selected");
-            return;
-        }
-
-        // 🎯 CRITICAL FIX: Validate that we have a valid SOW ID
-        if (!currentDoc.id) {
-            console.error(
-                "❌ [Excel Export] Current document has no ID:",
-                currentDoc,
-            );
-            toast.error(
-                "❌ Cannot export: Document ID is missing. Please save the document first.",
-            );
-            return;
-        }
-
-        // Check if a document is selected
-        if (!currentDoc || !currentDoc.id) {
-            console.error("❌ [Excel Export] No SOW document selected");
-            toast.error("Please select a document before exporting to Excel");
-            return;
-        }
-
-        console.log(`📊 [Excel Export] Exporting SOW ID: ${currentDoc.id}`);
-        toast.info("📊 Generating Excel...");
-
-        try {
-            // Use the document's actual database ID, not the threadSlug
-            const sowId = currentDoc.id;
-            const res = await fetch(`/api/sow/${sowId}/export-excel`, {
-                method: "GET",
-            });
-
-            if (!res.ok) {
-                const txt = await res.text();
-                console.error(
-                    `❌ [Excel Export] API Error (${res.status}):`,
-                    txt,
-                );
-
-                // Parse error response for better user feedback
-                let errorMessage = `Export failed (${res.status})`;
-                try {
-                    const errorJson = JSON.parse(txt);
-                    errorMessage =
-                        errorJson.error || errorJson.message || errorMessage;
-                } catch {
-                    errorMessage = txt || errorMessage;
-                }
-
-                throw new Error(errorMessage);
-            }
-
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            const safeTitle = (currentDoc.title || "Statement_of_Work").replace(
-                /[^a-z0-9]/gi,
-                "_",
-            );
-            a.download = `${safeTitle}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-            console.log("✅ [Excel Export] Successfully exported Excel file");
-            toast.success("✅ Excel downloaded successfully!");
-        } catch (error: any) {
-            console.error("❌ [Excel Export] Error:", error);
-            // Provide more specific error message for SOW not found
-            const errorMessage = error?.message || "Unknown error";
-            if (errorMessage.includes("SOW not found")) {
-                toast.error(
-                    "❌ Document not found. Please save the document and try again.",
-                );
-            } else {
-                toast.error(`❌ Error exporting Excel: ${errorMessage}`);
-            }
-        }
-    };
-
-    // Create Google Sheet with OAuth token
-    const createGoogleSheet = async (accessToken: string) => {
-        if (!currentDoc) {
-            toast.error("❌ No document selected");
-            return;
-        }
-
-        toast.info("📊 Creating Google Sheet...");
-
-        try {
             // Extract pricing from content
             const pricing = extractPricingFromContent(currentDoc.content);
 
@@ -4020,10 +2504,6 @@ Ask me questions to get business insights, such as:
             };
 
             const response = await fetch("/api/create-sow-sheet", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
                 body: JSON.stringify(sowData),
             });
 
@@ -7256,12 +5736,6 @@ Ask me questions to get business insights, such as:
             )}
 
             {/* Workspace Creation Progress Modal */}
-            <WorkspaceCreationProgress
-                isOpen={workspaceCreationProgress.isOpen}
-                workspaceName={workspaceCreationProgress.workspaceName}
-                currentStep={workspaceCreationProgress.currentStep}
-                completedSteps={workspaceCreationProgress.completedSteps}
-            />
 
             {/* Beautiful Onboarding Flow */}
             <OnboardingFlow
@@ -7271,5 +5745,3 @@ Ask me questions to get business insights, such as:
                 workspaceCount={workspaces.length}
             />
         </div>
-    );
-}

@@ -1,32 +1,3 @@
-// Export utilities for SOW documents
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-import * as XLSX from "xlsx";
-
-export interface PricingRow {
-    role: string;
-    hours: number;
-    rate: number;
-    total: number;
-}
-
-export interface SOWData {
-    title: string;
-    client?: string;
-    overview?: string;
-    deliverables?: string[];
-    pricingRows: PricingRow[];
-    discount?: { type: "percentage" | "fixed"; value: number };
-    showGST?: boolean;
-    assumptions?: string[];
-    timeline?: string;
-}
-
-/**
- * Extract pricing data from Novel editor content
- */
-export function extractPricingFromContent(content: any): PricingRow[] {
-    const rows: PricingRow[] = [];
 
     if (!content || !content.content) return rows;
 
@@ -75,271 +46,18 @@ export function extractPricingFromContent(content: any): PricingRow[] {
     };
 
     findTables(content.content);
-    return rows;
-}
-
-/**
- * Calculate totals with optional discount
- */
-export function calculateTotals(
-    rows: PricingRow[],
-    discount?: { type: "percentage" | "fixed"; value: number },
-) {
-    const subtotal = rows.reduce((sum, row) => sum + row.total, 0);
-    const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
-
-    let discountAmount = 0;
-    if (discount) {
-        if (discount.type === "percentage") {
-            discountAmount = subtotal * (discount.value / 100);
-        } else {
-            discountAmount = discount.value;
-        }
-    }
-
-    const grandTotal = subtotal - discountAmount;
-
-    return {
-        subtotal,
-        totalHours,
-        discountAmount,
-        grandTotal,
-        gstAmount: grandTotal * 0.1, // 10% GST
-    };
-}
-
-/**
- * Export pricing table to CSV
- */
-export function exportToCSV(
-    sowData: SOWData,
-    filename: string = "sow-pricing.csv",
-) {
-    const { pricingRows, discount } = sowData;
-    const totals = calculateTotals(pricingRows, discount);
-
-    // Create data array for CSV
-    const data: any[] = [
-        ["Social Garden - Scope of Work Pricing"],
-        [""],
-        ["Role", "Hours", "Rate (AUD)", "Total (AUD)"],
-    ];
-
-    pricingRows.forEach((row) => {
-        data.push([
-            row.role,
-            row.hours,
-            `$${row.rate}`,
-            `$${row.total.toFixed(2)} +GST`,
-        ]);
-    });
-
-    data.push([""]);
-    data.push(["Total Hours", totals.totalHours, "", ""]);
-    data.push(["Sub-Total", "", "", `$${totals.subtotal.toFixed(2)} +GST`]);
-
-    if (discount && totals.discountAmount > 0) {
-        const discountLabel =
-            discount.type === "percentage"
-                ? `Discount (${discount.value}%)`
-                : "Discount";
-        data.push([
-            discountLabel,
-            "",
-            "",
-            `-$${totals.discountAmount.toFixed(2)}`,
-        ]);
-    }
-
-    data.push(["Grand Total", "", "", `$${totals.grandTotal.toFixed(2)} +GST`]);
-    data.push(["GST (10%)", "", "", `$${totals.gstAmount.toFixed(2)}`]);
-    data.push([
-        "Total Inc. GST",
-        "",
-        "",
-        `$${(totals.grandTotal + totals.gstAmount).toFixed(2)}`,
-    ]);
-
-    // Convert to CSV string
-    const csvContent = data.map((row) => row.join(",")).join("\n");
-
-    // Download
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    link.click();
-}
-
-/**
- * Export pricing table to Excel
- */
-export function exportToExcel(
-    sowData: SOWData,
-    filename: string = "sow-pricing.xlsx",
-) {
-    const { pricingRows, discount, title } = sowData;
-    const totals = calculateTotals(pricingRows, discount);
-
-    // Create worksheet data
-    const wsData: any[] = [
-        ["Social Garden - Scope of Work"],
-        [title || "Statement of Work"],
-        [""],
-        ["Role", "Hours", "Rate (AUD)", "Total (AUD)"],
-    ];
-
-    pricingRows.forEach((row) => {
-        wsData.push([row.role, row.hours, row.rate, row.total]);
-    });
-
-    wsData.push([""]);
-    wsData.push(["Total Hours", totals.totalHours, "", ""]);
-    wsData.push(["Sub-Total (excl. GST)", "", "", totals.subtotal]);
-
-    if (discount && totals.discountAmount > 0) {
-        const discountLabel =
-            discount.type === "percentage"
-                ? `Discount (${discount.value}%)`
-                : "Discount";
-        wsData.push([discountLabel, "", "", -totals.discountAmount]);
-    }
-
-    wsData.push(["Grand Total (excl. GST)", "", "", totals.grandTotal]);
-    wsData.push(["GST (10%)", "", "", totals.gstAmount]);
-    wsData.push([
-        "Total Inc. GST",
-        "",
-        "",
-        totals.grandTotal + totals.gstAmount,
-    ]);
-
-    // Create workbook and worksheet
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // Set column widths
-    ws["!cols"] = [
-        { wch: 50 }, // Role
-        { wch: 10 }, // Hours
-        { wch: 15 }, // Rate
-        { wch: 20 }, // Total
-    ];
-
-    XLSX.utils.book_append_sheet(wb, ws, "SOW Pricing");
 
     // Return blob for API usage
     const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     return new Blob([excelBuffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-}
-
-/**
- * Generate PDF from HTML content
- */
-export async function exportToPDF(
-    element: HTMLElement,
-    filename: string = "sow-document.pdf",
-    options?: {
-        showLogo?: boolean;
-        logoUrl?: string;
-        title?: string;
-    },
-) {
-    try {
-        // Create canvas from HTML element
-        const canvas = await html2canvas(element, {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-        });
-
-        const imgData = canvas.toDataURL("image/png");
-        const pdf = new jsPDF({
-            orientation: "portrait",
-            unit: "mm",
-            format: "a4",
-        });
-
-        // Calculate dimensions
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        const ratio = canvasWidth / canvasHeight;
-        const width = pdfWidth - 20; // 10mm margins
-        const height = width / ratio;
-
-        // Add logo if provided
-        if (options?.showLogo && options?.logoUrl) {
-            try {
-                pdf.addImage(options.logoUrl, "PNG", 10, 10, 40, 15);
-            } catch (error) {
-                console.error("Error adding logo to PDF:", error);
-            }
-        }
-
-        // Add title if provided
-        if (options?.title) {
-            pdf.setFontSize(16);
-            pdf.setTextColor(44, 130, 61); // Social Garden green
-            pdf.text(options.title, 10, options?.showLogo ? 35 : 20);
-        }
-
-        // Add content
-        const yOffset = options?.title
-            ? options?.showLogo
-                ? 45
-                : 30
-            : options?.showLogo
-              ? 30
-              : 10;
-        let remainingHeight = height;
-        let yPosition = yOffset;
-
-        // Add pages as needed
-        while (remainingHeight > 0) {
-            pdf.addImage(
-                imgData,
-                "PNG",
-                10,
-                yPosition,
-                width,
-                Math.min(remainingHeight, pdfHeight - yPosition - 10),
-            );
-
-            remainingHeight -= pdfHeight - yPosition - 10;
-
-            if (remainingHeight > 0) {
-                pdf.addPage();
-                yPosition = 10;
-            }
-        }
-
         // Return blob for API usage instead of direct download
         const pdfBlob = pdf.output("blob");
         return pdfBlob;
     } catch (error) {
         console.error("Error generating PDF:", error);
         return null;
-    }
-}
-
-/**
- * Format currency for display
- */
-export function formatCurrency(
-    amount: number,
-    showGST: boolean = true,
-): string {
-    const formatted = `$${amount.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    return showGST ? `${formatted} +GST` : formatted;
-}
-
-/**
- * Parse markdown SOW content and extract structured data
- */
 export function parseSOWMarkdown(markdown: string): Partial<SOWData> {
     const lines = markdown.split("\n");
     const data: Partial<SOWData> = {
@@ -394,12 +112,6 @@ export function parseSOWMarkdown(markdown: string): Partial<SOWData> {
     }
 
     return data;
-}
-
-/**
- * Clean SOW content by removing non-client-facing elements
- */
-export function cleanSOWContent(content: string): string {
     // Remove any internal comments, thinking tags, tool calls, etc.
     return (
         content
@@ -415,4 +127,3 @@ export function cleanSOWContent(content: string): string {
             .replace(/<\/?[A-Z_]+>/gi, "")
             .trim()
     );
-}

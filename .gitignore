@@ -49,6 +49,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-error.log*
 
+# Backup files
+*.backup
+*.bak
+*.old
+
 # Credentials & Secrets
 client_secret_*.json
 socialgarden-sow-*.json
@@ -84,3 +89,4 @@ tsconfig.tsbuildinfo
 Thumbs.db
 docs/archive/old-root-app/node_modules/
 .env
+backups/*.sql

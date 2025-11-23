@@ -4,7 +4,7 @@
 export const WORKSPACE_CONFIG = {
   // Sidebar AI - For generating SOWs
   sidebar: {
-    slug: 'gen-the-architect',
+    slug: 'sow-generator',
     name: 'SOW Generator',
     description: 'Main workspace for AI-generated SOWs',
     purpose: 'Generate complete Statements of Work',
@@ -12,10 +12,10 @@ export const WORKSPACE_CONFIG = {
 
   // Editor Popup AI - For editing assistance
   editor: {
-    slug: 'pop',
-    name: 'Editor Assistant',
-    description: 'Workspace for in-editor AI assistance',
-    purpose: 'Help with SOW editing and refinement',
+    slug: 'inline-editor',
+    name: 'Inline Editor',
+    description: 'Workspace for in-editor text improvement',
+    purpose: 'Improve selected text in SOW editor',
   },
 
   // Dashboard AI - For analytics and reporting
@@ -33,6 +33,14 @@ export const WORKSPACE_CONFIG = {
     description: 'Central repository for all created SOWs',
     purpose: 'All SOWs are embedded here for analytics',
   },
+
+  // Prompt enhancer - For enhancing user prompts
+  promptEnhancer: {
+    slug: 'utility-prompt-enhancer',
+    name: 'Prompt Enhancer',
+    description: 'Workspace for enhancing user prompts',
+    purpose: 'Expand brief prompts into detailed SOW briefs',
+  },
 };
 
 /**
@@ -41,23 +49,6 @@ export const WORKSPACE_CONFIG = {
  * @returns The workspace slug
  */
 export function getWorkspaceForAgent(agentId: string): string {
-  // List of all Gardner workspace slugs
-  const gardnerSlugs = [
-    'gen-the-architect',
-    'property-marketing-pro',
-    'ad-copy-machine',
-    'crm-communication-specialist',
-    'case-study-crafter',
-    'landing-page-persuader',
-    'seo-content-strategist',
-    'proposal-and-audit-specialist'
-  ];
-  
-  // For Gardner agents (from AnythingLLM), the agentId IS the workspace slug
-  if (gardnerSlugs.includes(agentId)) {
-    return agentId; // Gardner workspace slugs are their IDs
-  }
-  
   switch (agentId) {
     case 'architect':
     case 'strategist':

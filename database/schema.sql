@@ -9,6 +9,22 @@ DROP TABLE IF EXISTS sow_acceptances;
 DROP TABLE IF EXISTS sow_comments;
 DROP TABLE IF EXISTS sow_activities;
 DROP TABLE IF EXISTS sows;
+DROP TABLE IF EXISTS folders;
+
+-- ================================================================
+-- Folders Table
+-- ================================================================
+CREATE TABLE folders (
+  id VARCHAR(255) PRIMARY KEY,
+  name VARCHAR(500) NOT NULL,
+  user_email VARCHAR(255),
+  workspace_slug VARCHAR(255), -- AnythingLLM workspace this folder belongs to
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  INDEX idx_workspace_slug (workspace_slug),
+  INDEX idx_user_email (user_email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ================================================================
 -- Main SOW Table
@@ -43,11 +59,17 @@ CREATE TABLE sows (
   folder_id VARCHAR(255), -- Reference to folder in localStorage (for now)
   creator_email VARCHAR(255), -- Agency user who created it
   
+  -- Social Garden Business Intelligence (Added: October 23, 2025)
+  vertical ENUM('property', 'education', 'finance', 'healthcare', 'retail', 'hospitality', 'professional-services', 'technology', 'other') DEFAULT NULL,
+  service_line ENUM('crm-implementation', 'marketing-automation', 'revops-strategy', 'managed-services', 'consulting', 'training', 'other') DEFAULT NULL,
+  
   -- Indexes for performance
   INDEX idx_status (status),
   INDEX idx_client_email (client_email),
   INDEX idx_created_at (created_at),
-  INDEX idx_expires_at (expires_at)
+  INDEX idx_expires_at (expires_at),
+  INDEX idx_vertical (vertical),
+  INDEX idx_service_line (service_line)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ================================================================

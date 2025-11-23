@@ -8,7 +8,10 @@ import {
   Search,
   X,
   Zap,
-  ArrowUp
+  ArrowUp,
+  Briefcase,
+  MessageCircle,
+  Code2
 } from "lucide-react";
 import { useEditor } from "novel";
 import { addAIHighlight } from "novel/extensions";
@@ -19,6 +22,7 @@ import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import AICompletionCommands from "./ai-completion-command";
 import { Input } from "../ui/input";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 
 interface OpenRouterModel {
   id: string;
@@ -38,22 +42,16 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
   const { editor } = useEditor();
   const [prompt, setPrompt] = useState("");
   const [models, setModels] = useState<OpenRouterModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem("ai-selector-model") || "anthropic/claude-3.5-sonnet";
-    }
-    return "anthropic/claude-3.5-sonnet";
-  });
   const [loadingModels, setLoadingModels] = useState(false);
-  const [showFreeOnly, setShowFreeOnly] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem("ai-selector-free-only") === "true";
-    }
-    return false;
-  });
   const [searchQuery, setSearchQuery] = useState("");
   const [showModelPicker, setShowModelPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Use database-backed preferences instead of localStorage
+  const { preferences, updatePreference, loading: prefsLoading } = useUserPreferences();
+  
+  const selectedModel = preferences['ai-selector-model'] || "anthropic/claude-3.5-sonnet";
+  const showFreeOnly = preferences['ai-selector-free-only'] === true;
 
   const { completion, complete, isLoading } = useCompletion({
     api: "/api/generate",
@@ -113,17 +111,17 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
     );
 
   const handleModelSelect = (modelId: string) => {
-    setSelectedModel(modelId);
-    localStorage.setItem("ai-selector-model", modelId);
+    // Save to database instead of localStorage
+    updatePreference('ai-selector-model', modelId);
     setShowModelPicker(false);
     const modelName = models.find(m => m.id === modelId)?.name;
     toast.success(`Switched to ${modelName}`);
   };
 
   const toggleFreeFilter = () => {
+    // Save to database instead of localStorage
     const newValue = !showFreeOnly;
-    setShowFreeOnly(newValue);
-    localStorage.setItem("ai-selector-free-only", String(newValue));
+    updatePreference('ai-selector-free-only', newValue);
   };
 
   const handleGenerate = async () => {
@@ -177,6 +175,47 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
       {/* Main Input Area */}
       {!isLoading && (
         <div className="p-4 space-y-3">
+          {/* Tone Quick Actions */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground shrink-0">Quick Tone:</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1.5 flex-1"
+              onClick={() => {
+                setPrompt("Rewrite this in a corporate, professional, and business-appropriate tone. Use formal language and maintain authority.");
+                handleGenerate();
+              }}
+            >
+              <Briefcase className="h-3 w-3" />
+              Corporate
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1.5 flex-1"
+              onClick={() => {
+                setPrompt("Rewrite this in a friendly, casual, conversational tone. Make it warm and approachable while staying clear.");
+                handleGenerate();
+              }}
+            >
+              <MessageCircle className="h-3 w-3" />
+              Casual
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1.5 flex-1"
+              onClick={() => {
+                setPrompt("Rewrite this in a precise, technical tone. Use industry terminology and be specific and analytical.");
+                handleGenerate();
+              }}
+            >
+              <Code2 className="h-3 w-3" />
+              Technical
+            </Button>
+          </div>
+
           {/* Prompt Input */}
           <div className="relative">
             <Input

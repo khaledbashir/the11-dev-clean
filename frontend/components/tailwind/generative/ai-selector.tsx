@@ -18,7 +18,10 @@ import {
   Copy,
   ThumbsUp,
   ThumbsDown,
-  RotateCcw
+  RotateCcw,
+  Briefcase,
+  MessageCircle,
+  Code2
 } from "lucide-react";
 import { useEditor } from "novel";
 import { addAIHighlight } from "novel/extensions";
@@ -30,12 +33,9 @@ import { ScrollArea } from "../ui/scroll-area";
 import AICompletionCommands from "./ai-completion-command";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
+import { useUserPreferences } from "@/hooks/use-user-preferences";
 
-// Phase 1 imports
-import { LoadingState } from "./ui/LoadingState";
-import { SuccessAnimation } from "./ui/SuccessAnimation";
-import { ErrorState } from "./ui/ErrorState";
-import { ThinkingIndicator } from "./ui/ThinkingIndicator";
+// Smart Suggestions and Keyboard Shortcuts
 import { SmartSuggestions } from "./ui/SmartSuggestions";
 import { KeyboardShortcutsHelp } from "./ui/KeyboardShortcutsHelp";
 import { detectContext, formatReadingTime, getReadabilityLevel } from "./utils/context-detector";
@@ -60,13 +60,17 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
   const { editor } = useEditor();
   const [prompt, setPrompt] = useState("");
   const [models, setModels] = useState<OpenRouterModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState("z-ai/glm-4.5-air:free");
   const [loadingModels, setLoadingModels] = useState(false);
-  const [showFreeOnly, setShowFreeOnly] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showModelPicker, setShowModelPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Use database-backed preferences instead of localStorage
+  const { preferences, updatePreference, loading: prefsLoading } = useUserPreferences();
+  
+  const selectedModel = preferences['ai-selector-model'] || "z-ai/glm-4.5-air:free";
+  const showFreeOnly = preferences['ai-selector-free-only'] === true;
 
   const [completion, setCompletion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -80,20 +84,9 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
 
   const hasCompletion = completion.length > 0;
 
-  // Client-side only - load from localStorage
+  // Client-side mount flag
   useEffect(() => {
     setIsClient(true);
-    const savedModel = localStorage.getItem("ai-selector-model");
-    // Validate saved model - if it's an old AnythingLLM model, reset to default
-    if (savedModel && savedModel.startsWith('anythingllm-')) {
-      console.log('🔄 Clearing old AnythingLLM model from localStorage');
-      localStorage.removeItem("ai-selector-model");
-      setSelectedModel("z-ai/glm-4.5-air:free"); // Reset to default
-    } else if (savedModel) {
-      setSelectedModel(savedModel);
-    }
-    const savedFreeOnly = localStorage.getItem("ai-selector-free-only") === "true";
-    setShowFreeOnly(savedFreeOnly);
   }, []);
 
   // Fetch models on mount
@@ -207,17 +200,17 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
     );
 
   const handleModelSelect = (modelId: string) => {
-    setSelectedModel(modelId);
-    localStorage.setItem("ai-selector-model", modelId);
+    // Save to database instead of localStorage
+    updatePreference('ai-selector-model', modelId);
     setShowModelPicker(false);
     const modelName = models.find(m => m.id === modelId)?.name;
     toast.success(`Switched to ${modelName}`);
   };
 
   const toggleFreeFilter = () => {
+    // Save to database instead of localStorage
     const newValue = !showFreeOnly;
-    setShowFreeOnly(newValue);
-    localStorage.setItem("ai-selector-free-only", String(newValue));
+    updatePreference('ai-selector-free-only', newValue);
   };
 
   const handleGenerate = async () => {
@@ -574,7 +567,7 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
                   <div className="grid grid-cols-4 gap-1.5">
                     {quickActions.map((action, idx) => (
                       <Button
-                        key={idx}
+                        key={`ai-action-${idx}-${action.prompt.substring(0, 15)}`}
                         size="sm"
                         className="h-8 text-xs flex flex-col items-center justify-center gap-0.5 bg-[#161B22] hover:bg-[#21262D] text-gray-300 hover:text-white border border-[#30363D] transition-colors"
                         onClick={() => {
@@ -588,6 +581,51 @@ export function AISelector({ onOpenChange }: AISelectorProps) {
                         <span>{action.label}</span>
                       </Button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tone Quick Actions - New Feature */}
+              {!hasCompletion && selectedText && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-0.5">Change Tone</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5 border-[#30363D] text-gray-300 hover:bg-[#161B22] hover:border-[#1CBF79] transition-colors"
+                      onClick={() => {
+                        setPrompt("Rewrite this in a corporate, professional, and business-appropriate tone. Use formal language and maintain authority.");
+                        setTimeout(() => handleGenerate(), 50);
+                      }}
+                    >
+                      <Briefcase className="h-3 w-3" />
+                      Corporate
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5 border-[#30363D] text-gray-300 hover:bg-[#161B22] hover:border-[#1CBF79] transition-colors"
+                      onClick={() => {
+                        setPrompt("Rewrite this in a friendly, casual, conversational tone. Make it warm and approachable while staying clear.");
+                        setTimeout(() => handleGenerate(), 50);
+                      }}
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      Casual
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5 border-[#30363D] text-gray-300 hover:bg-[#161B22] hover:border-[#1CBF79] transition-colors"
+                      onClick={() => {
+                        setPrompt("Rewrite this in a precise, technical tone. Use industry terminology and be specific and analytical.");
+                        setTimeout(() => handleGenerate(), 50);
+                      }}
+                    >
+                      <Code2 className="h-3 w-3" />
+                      Technical
+                    </Button>
                   </div>
                 </div>
               )}

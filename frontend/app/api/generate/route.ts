@@ -1,159 +1,96 @@
-import { Ratelimit } from "@upstash/ratelimit";
-import { kv } from "@vercel/kv";
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { match } from "ts-pattern";
+import { AnythingLLMService } from '@/lib/anythingllm';
 
-// IMPORTANT! Set the runtime to edge: https://vercel.com/docs/functions/edge-functions/edge-runtime
 export const runtime = "edge";
 
 export async function POST(req: NextRequest): Promise<Response> {
-  // Check if OpenRouter API key is set
-  if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY === "") {
-    return new Response("Missing OPENROUTER_API_KEY - make sure to add it to your .env file.", {
-      status: 400,
-    });
+  // Edge runtime needs explicit env var access
+  const anythingLLMURL = process.env.ANYTHINGLLM_URL || process.env.NEXT_PUBLIC_ANYTHINGLLM_URL || '';
+  const anythingLLMKey = process.env.ANYTHINGLLM_API_KEY || process.env.NEXT_PUBLIC_ANYTHINGLLM_API_KEY || '';
+  
+  console.log('[/api/generate] Configuration check:', {
+    hasURL: !!anythingLLMURL,
+    hasKey: !!anythingLLMKey,
+    urlPreview: anythingLLMURL?.substring(0, 30) + '...',
+  });
+  
+  if (!anythingLLMURL || !anythingLLMKey) {
+    console.error('[/api/generate] Missing AnythingLLM configuration');
+    return new Response(
+      JSON.stringify({ 
+        error: "AnythingLLM not configured on server",
+        details: {
+          hasURL: !!anythingLLMURL,
+          hasKey: !!anythingLLMKey,
+        }
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
-  // Rate limiting disabled - KV client type incompatibility with Ratelimit
-  // Can be re-enabled with proper Redis client setup
-
-  // Get model from request or fall back to env var, then to default
   const { prompt, option, command, model } = await req.json();
-  const defaultModel = process.env.OPENROUTER_DEFAULT_MODEL || "google/gemini-2.0-flash-exp:free";
-  const selectedModel = model || defaultModel;
 
-  const messages = match(option)
-    .with("continue", () => [
-      {
-        role: "system",
-        content:
-          "You are an AI writing assistant that continues existing text based on context from prior text. " +
-          "Give more weight/priority to the later characters than the beginning ones. " +
-          "Limit your response to no more than 200 characters, but make sure to construct complete sentences." +
-          "Output ONLY the continuation text, no explanations or commentary.",
-      },
-      {
-        role: "user",
-        content: prompt,
-      },
-    ])
-    .with("generate", () => [
-      {
-        role: "system",
-        content:
-          "You are an AI writing assistant that generates new content based on user requests. " +
-          "Output ONLY the generated content, no explanations or commentary. " +
-          "Format the response as requested by the user.",
-      },
-      {
-        role: "user",
-        content: command || prompt,
-      },
-    ])
-    .with("improve", () => [
-      {
-        role: "system",
-        content:
-          "You are an AI writing assistant that improves existing text. " +
-          "Output ONLY the improved version, no explanations or commentary. " +
-          "Limit your response to no more than 200 characters, but make sure to construct complete sentences.",
-      },
-      {
-        role: "user",
-        content: `The existing text is: ${prompt}`,
-      },
-    ])
-    .with("shorter", () => [
-      {
-        role: "system",
-        content:
-          "You are an AI writing assistant that shortens existing text. " + 
-          "Output ONLY the shortened version, no explanations or commentary.",
-      },
-      {
-        role: "user",
-        content: `The existing text is: ${prompt}`,
-      },
-    ])
-    .with("longer", () => [
-      {
-        role: "system",
-        content:
-          "You are an AI writing assistant that lengthens existing text. " +
-          "Output ONLY the expanded version, no explanations or commentary.",
-      },
-      {
-        role: "user",
-        content: `The existing text is: ${prompt}`,
-      },
-    ])
-    .with("fix", () => [
-      {
-        role: "system",
-        content:
-          "You are an AI writing assistant that fixes grammar and spelling errors in existing text. " +
-          "Output ONLY the corrected text, no explanations or commentary. " +
-          "Limit your response to no more than 200 characters, but make sure to construct complete sentences.",
-      },
-      {
-        role: "user",
-        content: `The existing text is: ${prompt}`,
-      },
-    ])
-    .with("zap", () => [
-      {
-        role: "system",
-        content:
-          "You are an AI writing assistant that transforms text based on user commands. " +
-          "Output ONLY the transformed text, no explanations, commentary, or meta-descriptions. " +
-          "Just apply the command to the text and return the result directly.",
-      },
-      {
-        role: "user",
-        content: `Text: ${prompt}\n\nCommand: ${command}\n\nOutput only the transformed text:`,
-      },
-    ])
-    .run();
+  const userMessage = match(option)
+    .with("continue", () => `Continue: ${prompt}`)
+    .with("generate", () => command || prompt)
+    .with("improve", () => `Improve: ${prompt}`)
+    .with("shorter", () => `Shorter: ${prompt}`)
+    .with("longer", () => `Longer: ${prompt}`)
+    .with("fix", () => `Fix: ${prompt}`)
+    .with("zap", () => `${command}\n\n${prompt}`)
+    .otherwise(() => prompt);
 
   try {
-    // Use OpenRouter for direct LLM completion (no RAG/document search needed)
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+    const endpoint = `${anythingLLMURL.replace(/\/$/, '')}/api/v1/workspace/utility-inline-editor/stream-chat`;
     
-    if (!openRouterApiKey) {
-      return new Response("Missing OPENROUTER_API_KEY in .env", {
-        status: 400,
-      });
-    }
+    console.log('[/api/generate] Sending to AnythingLLM:', {
+      endpoint,
+      option,
+      messageLength: userMessage.length,
+      model,
+    });
 
-    // Call OpenRouter streaming API directly
+    // Set the model provider for the utility workspace
+    const anythingLLM = new AnythingLLMService(anythingLLMURL, anythingLLMKey);
+    const success = await anythingLLM.setWorkspaceLLMProvider('utility-inline-editor', 'openrouter', model);
+    if (!success) {
+      console.warn('[/api/generate] Failed to set LLM provider, proceeding anyway');
+    }
+    
     const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
+      endpoint,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${openRouterApiKey}`,
+          'Authorization': `Bearer ${anythingLLMKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:5000',
-          'X-Title': 'Social Garden SOW Generator',
         },
         body: JSON.stringify({
-          model: selectedModel,
-          messages: messages,
-          stream: true,
+          message: userMessage,
+          mode: 'chat',
         }),
       }
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenRouter error: ${response.status}`, errorText);
+      const errorText = await response.text().catch(() => '');
+      console.error('[/api/generate] AnythingLLM error:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorPreview: errorText.substring(0, 200),
+      });
+      
       return new Response(
-        JSON.stringify({ error: `OpenRouter API error: ${response.status}` }),
+        JSON.stringify({ 
+          error: `AnythingLLM error: ${response.statusText}`,
+          status: response.status,
+          details: errorText.substring(0, 200),
+        }),
         { status: response.status, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Handle OpenRouter streaming response (SSE format)
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
     
@@ -173,52 +110,73 @@ export async function POST(req: NextRequest): Promise<Response> {
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
-            
-            // Parse SSE format (lines starting with "data: ")
             const lines = buffer.split('\n');
-            
-            // Keep the last incomplete line in buffer
             buffer = lines.pop() || '';
             
             for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6).trim();
-                
-                // Skip [DONE] marker
-                if (data === '[DONE]') continue;
-                
-                try {
-                  // Parse OpenRouter response format
-                  const json = JSON.parse(data);
-                  // OpenRouter streaming format: { "choices": [{ "delta": { "content": "..." } }] }
-                  const content = json.choices?.[0]?.delta?.content || '';
-                  if (content) {
-                    controller.enqueue(encoder.encode(content));
-                  }
-                } catch (e) {
-                  // Skip invalid JSON
-                }
-              }
-            }
-          }
-          
-          // Process any remaining data in buffer
-          if (buffer.trim() && buffer.startsWith('data: ')) {
-            const data = buffer.slice(6).trim();
-            if (data !== '[DONE]') {
+              if (!line) continue;
+              // SSE-ish lines prefixed with `data: ` or raw JSON lines
+              const candidate = line.startsWith('data: ') ? line.slice(6).trim() : line.trim();
+              if (!candidate || candidate === '[DONE]') continue;
+
               try {
-                const json = JSON.parse(data);
-                const content = json.choices?.[0]?.delta?.content || '';
-                if (content) {
-                  controller.enqueue(encoder.encode(content));
+                const json = JSON.parse(candidate);
+
+                // Common shapes handled by different LLM backends
+                // 1) { type: 'textResponse', textResponse: '...' }
+                if (typeof json?.textResponse === 'string') {
+                  controller.enqueue(encoder.encode(json.textResponse));
+                  continue;
                 }
-              } catch (e) {
-                // Skip invalid JSON
+
+                // 2) OpenAI-like choices: { choices: [{ delta: { content: '...' } }, ...] }
+                if (Array.isArray(json?.choices)) {
+                  for (const ch of json.choices) {
+                    const content = ch?.delta?.content || ch?.text || ch?.message?.content?.text || ch?.message?.content;
+                    if (content) controller.enqueue(encoder.encode(String(content)));
+                  }
+                  continue;
+                }
+
+                // 3) Some GLM or custom outputs use `output_text` or `content`
+                if (typeof json?.output_text === 'string') {
+                  controller.enqueue(encoder.encode(json.output_text));
+                  continue;
+                }
+
+                if (typeof json?.content === 'string') {
+                  controller.enqueue(encoder.encode(json.content));
+                  continue;
+                }
+
+                // 4) Fallback: if top-level is an array of strings
+                if (Array.isArray(json) && json.every(i => typeof i === 'string')) {
+                  for (const s of json) controller.enqueue(encoder.encode(s));
+                  continue;
+                }
+
+                // 5) If the payload is an object with nested text fields, try to stringify useful parts
+                const textFields = ['text', 'message', 'textResponse', 'output_text'];
+                let found = false;
+                for (const f of textFields) {
+                  const v = json[f];
+                  if (typeof v === 'string') {
+                    controller.enqueue(encoder.encode(v));
+                    found = true;
+                    break;
+                  }
+                }
+                if (found) continue;
+
+                // If we get here, nothing matched: surface a debug log for later inspection
+                console.warn('[/api/generate] Unrecognized stream JSON shape:', { preview: candidate.substring(0, 200) });
+              } catch (err) {
+                // Not JSON - treat as raw text
+                if (candidate) controller.enqueue(encoder.encode(candidate + '\n'));
               }
             }
           }
         } catch (error) {
-          console.error('Stream processing error:', error);
           controller.error(error);
         } finally {
           controller.close();
@@ -233,10 +191,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         "Connection": "keep-alive",
       },
     });
-  } catch (error) {
-    console.error('OpenRouter API error:', error);
+  } catch (error: any) {
+    console.error('[/api/generate] Exception:', error);
     return new Response(
-      JSON.stringify({ error: 'Failed to get response from OpenRouter' }),
+      JSON.stringify({ 
+        error: 'AnythingLLM request failed',
+        details: error?.message || String(error),
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

@@ -22,6 +22,7 @@ import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { formatInvestment } from '@/lib/sow-utils';
 import { StreamingThoughtAccordion } from './streaming-thought-accordion';
+import { SocialGardenBIWidgets } from './social-garden-bi';
 
 interface DashboardStats {
   totalSOWs: number;
@@ -29,6 +30,7 @@ interface DashboardStats {
   activeSOWs: number;
   thisMonthSOWs: number;
   recentActivity: Array<{
+    id: string;
     clientName: string;
     sowTitle: string;
     value: number;
@@ -48,43 +50,31 @@ interface DashboardStats {
   message?: string;
 }
 
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
+interface EnhancedDashboardProps {
+  onOpenInEditor?: (sowId: string) => void;
+  onOpenInPortal?: (sowId: string) => void;
+  [key: string]: any;
 }
 
-export function EnhancedDashboard() {
+export function EnhancedDashboard(props: EnhancedDashboardProps = {}) {
+  const { onOpenInEditor, onOpenInPortal } = props || {};
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Chat state
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     fetchDashboardStats();
-    // Add welcome message
-    setChatMessages([{
-      id: 'welcome-msg',
-      role: 'assistant',
-      content: '👋 Hi! I\'m your Dashboard AI. Ask me anything about your SOWs:\n\n• "How many proposals this month?"\n• "Show total revenue"\n• "List top clients"\n• "What services are most popular?"',
-      timestamp: new Date().toISOString()
-    }]);
   }, []);
 
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
       
-      // Fetch from database API (no artificial timeout - let browser handle it)
-      const response = await fetch('/api/dashboard/stats', {
-        // Removed AbortController timeout - browser has its own timeout
-        // This prevents premature aborts during slow database queries
+      // Fetch from database API with cache-busting to force fresh data
+      const cacheBuster = `?t=${Date.now()}`;
+      const response = await fetch(`/api/dashboard/stats${cacheBuster}`, {
+        // Add cache: 'no-store' to prevent browser caching
+        cache: 'no-store',
       });
       
       if (response.ok) {
@@ -114,44 +104,6 @@ export function EnhancedDashboard() {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleChatSend = async () => {
-    if (!chatInput.trim() || chatLoading) return;
-
-    const userMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      role: 'user',
-      content: chatInput,
-      timestamp: new Date().toISOString()
-    };
-
-    setChatMessages(prev => [...prev, userMessage]);
-    setChatInput('');
-    setChatLoading(true);
-
-    try {
-      // AI Chat feature temporarily disabled
-      // TODO: Implement proper thread creation before sending chat messages
-      const assistantMessage: ChatMessage = {
-        id: `msg-${Date.now()}-resp`,
-        role: 'assistant',
-        content: 'Dashboard AI is currently under maintenance. Please check back soon!',
-        timestamp: new Date().toISOString()
-      };
-
-      setChatMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Chat error:', error);
-      setChatMessages(prev => [...prev, {
-        id: `msg-${Date.now()}-error`,
-        role: 'assistant',
-        content: '❌ Sorry, I encountered an error. Please try again.',
-        timestamp: new Date().toISOString()
-      }]);
-    } finally {
-      setChatLoading(false);
     }
   };
 
@@ -185,27 +137,26 @@ export function EnhancedDashboard() {
   }
 
   return (
-    <div className="h-full flex bg-[#0e0f0f]">
-      {/* Main Dashboard - Reduced left padding to eliminate gap */}
-      <div className="flex-1 overflow-auto py-6 pr-6 pl-2">
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">📊 SOW Dashboard</h1>
-            <p className="text-gray-400 mt-1">Real-time analytics powered by AI</p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={fetchDashboardStats}
-              variant="outline"
-              className="border-[#1CBF79] text-[#1CBF79] hover:bg-[#1CBF79]/10"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
+    <div className="w-full h-full flex flex-col bg-[#0e0f0f] overflow-y-auto py-6 pr-6 pl-2">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between flex-shrink-0">
+        <div>
+          <h1 className="text-3xl font-bold text-white">📊 SOW Dashboard</h1>
+          <p className="text-gray-400 mt-1">Real-time analytics powered by AI</p>
+          {/* Dashboard filtering UI removed */}
         </div>
-
+        <div className="flex gap-2">
+          <Button
+            onClick={fetchDashboardStats}
+            variant="outline"
+            className="border-[#1CBF79] text-[#1CBF79] hover:bg-[#1CBF79]/10"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+      
         {/* Empty State */}
         {stats.totalSOWs === 0 && (
           <div className="bg-gradient-to-br from-[#0e2e33] to-[#1b1b1e] border border-[#20e28f]/30 rounded-xl p-8 mb-6 text-center">
@@ -268,8 +219,11 @@ export function EnhancedDashboard() {
               </div>
               <div className="space-y-4">
                 {stats.recentActivity && stats.recentActivity.length > 0 ? (
-                  stats.recentActivity.map((activity, idx) => (
-                    <div key={idx} className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-4 hover:border-blue-400/50 transition-colors">
+                  stats.recentActivity.map((activity) => (
+                    <div 
+                      key={activity.id} 
+                      className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-4 hover:border-blue-400/50 transition-colors"
+                    >
                       <div className="font-semibold text-white">{activity.clientName}</div>
                       <div className="text-sm text-gray-400 mt-1">{activity.sowTitle}</div>
                       <div className="flex items-center justify-between mt-2">
@@ -277,6 +231,14 @@ export function EnhancedDashboard() {
                           {formatInvestment(activity.value)}
                         </span>
                         <span className="text-xs text-gray-500">{activity.date}</span>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Button size="sm" className="bg-[#1CBF79] hover:bg-[#15a366]" onClick={() => onOpenInEditor?.(activity.id)}>
+                          Open in Editor
+                        </Button>
+                        <Button size="sm" variant="outline" className="border-[#1CBF79] text-[#1CBF79] hover:bg-[#1CBF79]/10" onClick={() => onOpenInPortal?.(activity.id)}>
+                          Open Portal
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -296,8 +258,8 @@ export function EnhancedDashboard() {
               </div>
               <div className="space-y-3">
                 {stats.topClients && stats.topClients.length > 0 ? (
-                  stats.topClients.map((client, idx) => (
-                    <div key={idx} className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-4">
+                  stats.topClients.map((client) => (
+                    <div key={client.name} className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div className="font-semibold text-white">{client.name}</div>
                         <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded">
@@ -325,8 +287,8 @@ export function EnhancedDashboard() {
               </div>
               <div className="space-y-3">
                 {stats.popularServices && stats.popularServices.length > 0 ? (
-                  stats.popularServices.map((service, idx) => (
-                    <div key={idx} className="space-y-2">
+                  stats.popularServices.map((service) => (
+                    <div key={service.service} className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-white font-medium">{service.service}</span>
                         <span className="text-gray-400">{service.count}x</span>
@@ -346,131 +308,13 @@ export function EnhancedDashboard() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* AI Chat Sidebar - Right Side (FIXED HEIGHT WITH SCROLL) */}
-      {showChat && (
-        <div className="w-[420px] border-l border-[#0e2e33] bg-[#1b1b1e] flex flex-col h-screen">
-          {/* Chat Header */}
-          <div className="p-4 border-b border-[#0e2e33] flex-shrink-0">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Dashboard AI Assistant</h3>
-                  <p className="text-xs text-gray-400">Analyze your SOW data</p>
-                </div>
-              </div>
-            </div>
-            
-            {/* Info Banner */}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-xs text-blue-300">
-              <strong>💡 Tips:</strong> Ask about totals, trends, clients, or services
-            </div>
-          </div>
-
-          {/* Chat Messages - FIXED HEIGHT WITH SCROLL */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ maxHeight: 'calc(100vh - 280px)' }}>
-            {chatMessages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center mr-2 flex-shrink-0">
-                    <Sparkles className="w-4 h-4 text-emerald-400" />
-                  </div>
-                )}
-                <div
-                  className={`max-w-[75%] rounded-lg p-3 ${
-                    msg.role === 'user'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-[#0e0f0f] border border-[#0e2e33] text-gray-200'
-                  }`}
-                >
-                  {/* Show thinking section with accordion for assistant messages */}
-                  {msg.role === 'assistant' && (
-                    <div className="mb-3">
-                      <StreamingThoughtAccordion 
-                        content={msg.content}
-                        messageId={msg.id}
-                        isStreaming={false}
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Show actual content */}
-                  <div className="text-sm whitespace-pre-wrap leading-relaxed">
-                    {msg.content.replace(/<think>[\s\S]*?<\/think>/gi, '')}
-                  </div>
-                  <div className="text-xs opacity-50 mt-2">
-                    {new Date(msg.timestamp).toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                  </div>
-                </div>
-                {msg.role === 'user' && (
-                  <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center ml-2 flex-shrink-0">
-                    <span className="text-sm font-bold text-blue-400">You</span>
-                  </div>
-                )}
-              </div>
-            ))}
-            
-            {chatLoading && (
-              <div className="flex justify-start">
-                <div className="w-8 h-8 bg-emerald-500/20 rounded-lg flex items-center justify-center mr-2">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div className="bg-[#0e0f0f] border border-[#0e2e33] rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
-                    <span className="text-sm text-gray-400">Thinking...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Chat Input - FIXED AT BOTTOM */}
-          <div className="p-4 border-t border-[#0e2e33] flex-shrink-0 bg-[#1b1b1e]">
-            <div className="flex gap-2">
-              <Input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleChatSend();
-                  }
-                }}
-                placeholder="Ask about your SOWs..."
-                disabled={chatLoading}
-                className="bg-[#0e0f0f] border-[#0e2e33] text-white placeholder:text-gray-500 focus:border-emerald-500"
-              />
-              <Button
-                onClick={handleChatSend}
-                disabled={chatLoading || !chatInput.trim()}
-                className="bg-[#1CBF79] hover:bg-[#15a366] flex-shrink-0"
-              >
-                {chatLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Press Enter to send • Shift+Enter for new line
-            </p>
-          </div>
+        {/* Social Garden Business Intelligence Widgets */}
+        <div className="mt-6">
+          <SocialGardenBIWidgets />
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
 }
 
 // Metric Card Component

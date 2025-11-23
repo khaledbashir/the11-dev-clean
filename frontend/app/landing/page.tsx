@@ -72,14 +72,6 @@ export default function LandingPage() {
       icon: Sparkles,
       category: 'AI Intelligence'
     },
-    {
-      id: 'gardner-studio',
-      name: 'Gardner AI Studio',
-      description: '8 specialized AI agents for different marketing tasks: Property Marketing Pro, Ad Copy Machine, SEO Content Strategist, Case Study Crafter, Landing Page Persuader, Proposal & Audit Specialist, CRM Communication Specialist',
-      price: 400,
-      icon: Bot,
-      category: 'AI Intelligence'
-    },
     
     // WORKSPACE & ORGANIZATION
     {
@@ -224,11 +216,7 @@ export default function LandingPage() {
         <div className="relative max-w-7xl mx-auto px-6 py-20">
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            <img 
-              src="/images/logo-light.png" 
-              alt="Social Garden" 
-              className="h-16 w-auto"
-            />
+            <h1 className="text-3xl font-bold text-white">Social Garden</h1>
           </div>
 
           <div className="text-center mb-12">
@@ -700,7 +688,7 @@ export default function LandingPage() {
               { icon: Settings, label: 'RESTful API' },
               { icon: Cloud, label: 'Cloud Deployment Ready' },
             ].map((feature, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-3 rounded-lg bg-[#1CBF79]/5 border border-[#1CBF79]/10">
+              <div key={`feature-${idx}-${feature.label}`} className="flex items-center gap-3 p-3 rounded-lg bg-[#1CBF79]/5 border border-[#1CBF79]/10">
                 <feature.icon className="w-5 h-5 text-[#1CBF79] flex-shrink-0" />
                 <span className="text-sm text-white">{feature.label}</span>
               </div>
@@ -750,7 +738,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <img src="/images/logo-light.png" alt="Social Garden" className="h-8 w-auto" />
+              <span className="text-gray-400 text-sm font-semibold">Social Garden</span>
               <span className="text-gray-400 text-sm">© 2025 Social Garden. All rights reserved.</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-gray-400">
